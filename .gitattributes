@@ -1,0 +1,4 @@
+# Preserve profiler payload bytes exactly. These files are hash-validated by their managers.
+# In particular, Windows Git checkout must NOT convert LF to CRLF in the bundled CET payload.
+components/cet/** -text
+components/grsp/** -text
