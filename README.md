@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.10 — native Windows controller
+## v0.2.11 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -108,3 +108,16 @@ While profiling, CapFrameX's **Running processes** list should contain Cyberpunk
 **RESET CAPTURE STATE** is for incomplete/failed captures. It moves the current/latest raw GRSP capture, CET live profiler CSVs, and latest CapFrameX capture into `Results\Discarded\Reset_...`. This cleans the three-source capture state without uninstalling the profilers or deleting already-collected TOTAL Profiler results.
 
 A reset timestamp prevents old source captures from being accidentally reused by the next **COLLECT RESULTS**. The same boundary is advanced after each successful collection.
+
+
+## v0.2.11 CapFrameX capture defaults
+
+CapFrameX upstream defaults capture time to 20 seconds. TOTAL Profiler overrides this for its profiling workflow:
+
+- capture hotkey: F11
+- capture time: 0 seconds (unlimited; second F11 stops)
+- capture delay: 0
+- hotkey sound mode: Voice
+- start/stop sound level: 25%
+
+The bundled portable AppSettings are seeded at build time, and **INSTALL PROFILERS** also reapplies these settings with a backup of an existing AppSettings file. Users therefore do not need to manually change the CapFrameX 20-second capture default.

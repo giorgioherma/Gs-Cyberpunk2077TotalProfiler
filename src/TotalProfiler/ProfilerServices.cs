@@ -9,7 +9,7 @@ namespace GsCyberpunkTotalProfiler;
 internal static class ProfilerServices
 {
     public const string AppName = "G's Cyberpunk 2077 TOTAL Profiler";
-    public const string Version = "0.2.10";
+    public const string Version = "0.2.11";
     public const string GrspVersion = "0.5.0";
     public const string CetVersion = "3.0.0-alpha6b";
     public const string CorrelatorVersion = "0.2.0-native";
@@ -101,26 +101,44 @@ internal static class ProfilerServices
     public static string ConfigureCapFrameXF11BestEffort(string exePath)
     {
         var (_, cfg) = DetectCapFrameXPath(exePath);
-        if (cfg is null || !Directory.Exists(cfg)) return "CapFrameX settings folder not found yet. Set Capture Hotkey to F11 in CapFrameX.";
-        var candidates = Directory.EnumerateFiles(cfg, "*.json", SearchOption.TopDirectoryOnly).ToList();
-        foreach (var path in candidates)
+        if (cfg is null) return "CapFrameX settings folder could not be determined.";
+
+        Directory.CreateDirectory(cfg);
+        var path = Path.Combine(cfg, "AppSettings.json");
+        System.Text.Json.Nodes.JsonObject obj;
+
+        try
         {
-            try
+            if (File.Exists(path))
             {
-                var text = File.ReadAllText(path);
-                using var doc = JsonDocument.Parse(text);
-                var node = System.Text.Json.Nodes.JsonNode.Parse(text);
-                if (node is null) continue;
-                bool changed = SetJsonKeyRecursive(node, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "capturehotkey", "capturehotkeystring" }, CaptureKey);
-                if (!changed) continue;
+                var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path));
+                obj = parsed as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+
                 var backup = path + ".TOTALProfiler.bak";
                 if (!File.Exists(backup)) File.Copy(path, backup);
-                File.WriteAllText(path, node.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
-                return $"CapFrameX capture hotkey set to F11. Backup: {Path.GetFileName(backup)}";
             }
-            catch { }
+            else obj = new System.Text.Json.Nodes.JsonObject();
+
+            // TOTAL Profiler needs key-controlled, open-ended CapFrameX captures.
+            // CapFrameX upstream defaults CaptureTime to 20 seconds, so explicitly
+            // override it to 0 (unlimited until the second F11).
+            obj["CaptureHotKey"] = CaptureKey;
+            obj["CaptureTime"] = 0.0;
+            obj["UseGlobalCaptureTime"] = true;
+            obj["CaptureDelay"] = 0.0;
+
+            // Keep audible start/stop confirmation enabled for the bundled workflow.
+            obj["HotkeySoundMode"] = "Voice";
+            if (obj["VoiceSoundLevel"] is null) obj["VoiceSoundLevel"] = 0.25;
+            if (obj["SimpleSoundLevel"] is null) obj["SimpleSoundLevel"] = 0.25;
+
+            File.WriteAllText(path, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
+            return "CapFrameX configured automatically: F11 capture key · unlimited capture (0 s) · voice start/stop sounds.";
         }
-        return "CapFrameX capture-hotkey setting was not found. Set Capture Hotkey to F11 in CapFrameX.";
+        catch (Exception ex)
+        {
+            return "CapFrameX automatic configuration failed: " + ex.Message;
+        }
     }
 
     public static string RestoreCapFrameXConfigBestEffort(string exePath)

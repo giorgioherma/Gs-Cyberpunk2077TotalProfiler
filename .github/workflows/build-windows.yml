@@ -79,6 +79,24 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           Copy-Item (Join-Path $capExe.Directory.FullName '*') $dest -Recurse -Force
 
+          # TOTAL Profiler defaults: key-controlled capture, no 20-second auto-stop,
+          # and audible start/stop confirmation. CapFrameX fills all other settings
+          # from its own defaults on first launch.
+          $cfgDir = Join-Path $dest 'Portable\Config'
+          $captureDir = Join-Path $dest 'Portable\Captures'
+          New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $captureDir | Out-Null
+          $appSettings = [ordered]@{
+            CaptureHotKey = 'F11'
+            CaptureTime = 0.0
+            UseGlobalCaptureTime = $true
+            CaptureDelay = 0.0
+            HotkeySoundMode = 'Voice'
+            VoiceSoundLevel = 0.25
+            SimpleSoundLevel = 0.25
+          }
+          $appSettings | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $cfgDir 'AppSettings.json')
+
           $third = 'publish\THIRD_PARTY\CapFrameX'
           New-Item -ItemType Directory -Force -Path $third | Out-Null
           Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/CXWorld/CapFrameX/v1.9.0/LICENSE' -Headers $headers -OutFile (Join-Path $third 'LICENSE.txt')
@@ -88,7 +106,7 @@ jobs:
             'Upstream: https://github.com/CXWorld/CapFrameX'
             'Bundled release: v1.9.0'
             'Bundled asset: release_1.9.0_portable.zip'
-            'Upstream asset SHA256: 980bee035c7236de7eecf4309c7738c8883fe194a6d5a794de7399d5e1ee3ad1'
+            'Upstream asset SHA256: 00d56035681b975cee2fa392b93024ad60aaf9c0d1fcea91e8cb9c0fb6f1803a'
             'Release URL: https://github.com/CXWorld/CapFrameX/releases/tag/v1.9.0'
             'Runtime: CapFrameX 1.9.0 requires .NET 10 Desktop Runtime.'
             'TOTAL Profiler does not version-lock CapFrameX; users may link an existing compatible CapFrameX.exe instead.'
@@ -102,6 +120,7 @@ jobs:
           if (!(Test-Path 'publish\components\grsp\red4ext\plugins\redscript_profiler_alpha.dll')) { throw 'GRSP payload missing' }
           if (!(Test-Path 'publish\components\cet\CET_Manager_Core.ps1')) { throw 'CET manager missing' }
           if (!(Test-Path 'publish\Tools\CapFrameX\CapFrameX.exe')) { throw 'Bundled CapFrameX missing' }
+          if (!(Test-Path 'publish\Tools\CapFrameX\Portable\Config\AppSettings.json')) { throw 'Bundled CapFrameX TOTAL Profiler settings missing' }
           if (!(Test-Path 'publish\THIRD_PARTY\CapFrameX\LICENSE.txt')) { throw 'CapFrameX license notice missing' }
 
           $checks = @{
@@ -124,14 +143,14 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
           @(
             "G's Cyberpunk 2077 TOTAL Profiler"
-            'Version: 0.2.10'
+            'Version: 0.2.11'
             "Git commit: $env:GITHUB_SHA"
             'Runtime: .NET 8 self-contained win-x64'
             'Packaging: normal self-contained .NET files; NOT PyInstaller; NOT self-extracting'
             'Python required: no'
             '.NET installation required for TOTAL Profiler: no'
             'Bundled profiler payload hashes: verified during build'
-            'CapFrameX: official upstream stable portable v1.9.0; bundled capture path Tools/CapFrameX/Portable/Captures; existing compatible versions may be linked instead'
+            'CapFrameX: upstream stable portable v1.9.0; F11; CaptureTime=0 unlimited; voice sounds; bundled captures Tools/CapFrameX/Portable/Captures'
           ) | Set-Content -Encoding UTF8 stage\BUILD_INFO.txt
 
           Push-Location stage

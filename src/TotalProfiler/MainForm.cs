@@ -85,7 +85,7 @@ internal sealed class MainForm : Form
         {
             AutoSize = true,
             MaximumSize = new Size(1060, 0),
-            Text = $"Bundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion} stable portable release — requires .NET 10 Desktop Runtime. Bundled captures: .\\Tools\\CapFrameX\\Portable\\Captures. Browse may link any compatible existing version."
+            Text = $"Bundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion} stable portable release — requires .NET 10 Desktop Runtime. TOTAL Profiler preconfigures F11, unlimited capture (0 s), and voice start/stop sounds. Bundled captures: .\\Tools\\CapFrameX\\Portable\\Captures."
         };
         setupGrid.Controls.Add(capRuntimeNote, 0, 5); setupGrid.SetColumnSpan(capRuntimeNote, 4);
 
@@ -112,7 +112,7 @@ internal sealed class MainForm : Form
         af.Controls.AddRange([installButton, collectButton, compareButton, openLatest, resetResults, resetCapture, resetCaptureNote, restoreAll]); actions.Controls.Add(af); outer.Controls.Add(actions);
 
         var workflow = Group("Capture workflow");
-        var wf = new Label { AutoSize = true, MaximumSize = new Size(1060, 0), Text = $"1) INSTALL PROFILERS and confirm Install check = VERIFIED ✓.   2) Launch CapFrameX and Cyberpunk 2077.   3) F11 starts GRSP + CET + CapFrameX.   4) F11 stops all three.   5) F12 exports CET CSVs.   6) Close the game.   7) COLLECT RESULTS.   8) COMPARE RESULTS.\r\n\r\nCET note: after first profiler install, bind 'Profiler: START / PAUSE / RESUME' to F11 and 'Profiler: CREATE CSV' to F12 in CET > Bindings.\r\nCapFrameX note: while profiling, Cyberpunk 2077 should be the only app in CapFrameX 'Running processes'. If anything else is listed, move it to the CapFrameX ignore list before capture.\r\nBundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion}; Browse may link any compatible version." };
+        var wf = new Label { AutoSize = true, MaximumSize = new Size(1060, 0), Text = $"1) INSTALL PROFILERS and confirm Install check = VERIFIED ✓.   2) Launch CapFrameX and Cyberpunk 2077.   3) F11 starts GRSP + CET + CapFrameX.   4) F11 stops all three.   5) F12 exports CET CSVs.   6) Close the game.   7) COLLECT RESULTS.   8) COMPARE RESULTS.\r\n\r\nCET note: after first profiler install, bind 'Profiler: START / PAUSE / RESUME' to F11 and 'Profiler: CREATE CSV' to F12 in CET > Bindings.\r\nCapFrameX note: TOTAL Profiler configures F11 + unlimited capture (0 s) + voice start/stop sounds automatically. While profiling, Cyberpunk 2077 should be the only app in CapFrameX 'Running processes'; move anything else to its ignore list.\r\nBundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion}; Browse may link any compatible version." };
         workflow.Controls.Add(wf); outer.Controls.Add(workflow);
 
         var logGroup = Group("Log");
@@ -398,7 +398,7 @@ internal sealed class MainForm : Form
             "GRSP: installed and exact DLL hash confirmed.\r\n" +
             "CET profiler: PROFILER_ACTIVE and managed state confirmed.\r\n" +
             "CET controls: present.\r\n\r\n" +
-            "GRSP uses F11 automatically.\r\nCapFrameX should use F11.\r\n\r\n" +
+            "GRSP uses F11 automatically.\r\nCapFrameX is configured automatically: F11 + unlimited capture + voice start/stop sounds.\r\n\r\n" +
             "CET requires one binding step in-game:\r\n  Profiler: START / PAUSE / RESUME -> F11\r\n  Profiler: CREATE CSV -> F12",
             ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
     });
