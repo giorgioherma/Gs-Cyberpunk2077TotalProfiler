@@ -156,14 +156,58 @@ internal static class ProfilerServices
         try
         {
             System.Text.Json.Nodes.JsonObject obj;
+            var backup = path + ".TOTALProfiler.bak";
+
             if (File.Exists(path))
             {
-                var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path));
-                obj = parsed as System.Text.Json.Nodes.JsonObject ?? throw new InvalidOperationException("AppSettings.json root is not an object.");
-                var backup = path + ".TOTALProfiler.bak";
-                if (!File.Exists(backup)) File.Copy(path, backup);
+                try
+                {
+                    var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path));
+                    obj = parsed as System.Text.Json.Nodes.JsonObject
+                          ?? throw new InvalidOperationException("AppSettings.json root is not an object.");
+                }
+                catch (JsonException) when (bundled)
+                {
+                    // v0.2.19 briefly emitted an invalid replacement token ("$10.0")
+                    // while forcing CapFrameX's Double literals. A first failed install
+                    // normally left the original seeded JSON in .TOTALProfiler.bak.
+                    // Recover that backup automatically; if it is absent/unreadable,
+                    // rebuild the bundled file from a minimal known-good object.
+                    System.Text.Json.Nodes.JsonObject? recovered = null;
+                    if (File.Exists(backup))
+                    {
+                        try
+                        {
+                            recovered = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(backup))
+                                        as System.Text.Json.Nodes.JsonObject;
+                        }
+                        catch { }
+                    }
+
+                    obj = recovered ?? new System.Text.Json.Nodes.JsonObject();
+                }
+
+                if (!File.Exists(backup))
+                {
+                    // Only back up a parseable original. Never preserve the known-bad
+                    // v0.2.19 malformed JSON as the restoration source.
+                    var currentText = File.ReadAllText(path);
+                    try
+                    {
+                        _ = System.Text.Json.Nodes.JsonNode.Parse(currentText);
+                        File.WriteAllText(backup, currentText);
+                    }
+                    catch (JsonException) when (bundled)
+                    {
+                        // Bundled malformed file is a TOTAL Profiler regression and is
+                        // intentionally replaced below.
+                    }
+                }
             }
-            else obj = new System.Text.Json.Nodes.JsonObject();
+            else
+            {
+                obj = new System.Text.Json.Nodes.JsonObject();
+            }
 
             // Touch only the three settings TOTAL Profiler actually requires.
             // Everything else remains CapFrameX-owned/defaulted.
@@ -171,22 +215,26 @@ internal static class ProfilerServices
             obj["CaptureTime"] = 0.0;
             obj["CaptureDelay"] = 0.0;
 
-            // CapFrameX 1.9.1 beta's JsonSettingsStorage deserializes JSON numbers into CLR
-            // Int32 vs Double based on the literal. Its CaptureView requires CaptureTime and
-            // CaptureDelay to be Double. System.Text.Json may emit 0.0 as the integer-looking
-            // literal 0, which makes CaptureView fail to construct. Force explicit decimal
-            // literals for the two Double settings we own.
+            // CapFrameX 1.9.1 beta strictly expects CaptureTime/CaptureDelay to deserialize
+            // as CLR Double. System.Text.Json can serialize 0.0 as the integer-looking
+            // literal 0, so normalize ONLY those two numeric literals after serialization.
+            //
+            // IMPORTANT: use a MatchEvaluator. The old replacement string "$10.0" was
+            // ambiguous to Regex.Replace and could literally write "$10.0" into JSON.
             var capJson = obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             capJson = System.Text.RegularExpressions.Regex.Replace(
                 capJson,
                 "(\\\"CaptureTime\\\"\\s*:\\s*)0(?=\\s*[,}])",
-                "$10.0");
+                m => m.Groups[1].Value + "0.0");
             capJson = System.Text.RegularExpressions.Regex.Replace(
                 capJson,
                 "(\\\"CaptureDelay\\\"\\s*:\\s*)0(?=\\s*[,}])",
-                "$10.0");
+                m => m.Groups[1].Value + "0.0");
 
+            // Refuse to write anything CapFrameX itself cannot parse.
+            using (JsonDocument.Parse(capJson)) { }
             File.WriteAllText(path, capJson + Environment.NewLine);
+
             return bundled
                 ? "Bundled CapFrameX portable mode verified: F11 · unlimited capture (0 s) · Portable/Captures."
                 : "Linked CapFrameX configured: F11 · unlimited capture (0 s).";
