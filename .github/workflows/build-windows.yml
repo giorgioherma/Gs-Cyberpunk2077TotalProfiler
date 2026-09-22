@@ -81,18 +81,17 @@ jobs:
 
           # TOTAL Profiler's bundled CapFrameX always starts in the documented
           # portable layout. An empty Captures folder is valid before the first run.
-          @'
-{
-  "portable": true,
-  "paths": {
-    "config": "./Portable/Config",
-    "captures": "./Portable/Captures",
-    "screenshots": "./Portable/Screenshots",
-    "logs": "./Portable/Logs",
-    "cloud": "./Portable/Captures/Cloud"
-  }
-}
-'@ | Set-Content -Encoding UTF8 (Join-Path $dest 'portable.json')
+          $portableConfig = [ordered]@{
+            portable = $true
+            paths = [ordered]@{
+              config = './Portable/Config'
+              captures = './Portable/Captures'
+              screenshots = './Portable/Screenshots'
+              logs = './Portable/Logs'
+              cloud = './Portable/Captures/Cloud'
+            }
+          }
+          $portableConfig | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $dest 'portable.json')
 
           New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Config') | Out-Null
           New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Captures') | Out-Null
@@ -102,16 +101,15 @@ jobs:
 
           # DWM is Windows Desktop Window Manager, not TOTAL Profiler. Seed it as
           # ignored so a freshly launched CapFrameX waits for the game process.
-          @'
-[
-  {
-    "Name": "dwm",
-    "DisplayName": "Desktop Window Manager",
-    "IsBlacklisted": true,
-    "LastCaptureTime": null
-  }
-]
-'@ | Set-Content -Encoding UTF8 (Join-Path $dest 'Portable\Config\Processes.json')
+          $processSeed = @(
+            [ordered]@{
+              Name = 'dwm'
+              DisplayName = 'Desktop Window Manager'
+              IsBlacklisted = $true
+              LastCaptureTime = $null
+            }
+          )
+          $processSeed | ConvertTo-Json -Depth 3 | Set-Content -Encoding UTF8 (Join-Path $dest 'Portable\Config\Processes.json')
 
           $third = 'publish\THIRD_PARTY\CapFrameX'
           New-Item -ItemType Directory -Force -Path $third | Out-Null
