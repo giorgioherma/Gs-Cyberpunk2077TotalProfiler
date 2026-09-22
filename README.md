@@ -152,3 +152,11 @@ Run_TOTAL_Profiler.bat
 ## Prototype scope
 
 This first unified build intentionally keeps the tested profiler engines unchanged. The main remaining UX limitation is CET's binding system: CET requires the user to assign F11/F12 once inside its Bindings UI. A later GRSP build can move the shared F11 setting into a common config if configurable capture keys are required.
+
+## Windows build packaging
+
+v0.1.1 changes only the Windows packaging method. The application is built as a transparent **one-folder** portable package instead of a PyInstaller one-file self-extracting executable. UPX is disabled and the PyInstaller version is pinned to 6.22.3. The artifact includes `BUILD_INFO.txt` and `SHA256SUMS.txt`.
+
+This reduces opaque self-extracting behavior and makes the packaged files inspectable. The profiler installation/capture/correlation logic is unchanged.
+
+The application is currently unsigned. Windows/browser reputation systems can still warn about a new unsigned executable, especially because this utility manages game profiling DLL/ASI payloads. For a public release, Authenticode code signing is the proper long-term trust/reputation solution.

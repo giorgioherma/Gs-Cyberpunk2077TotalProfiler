@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-G's Cyberpunk 2077 TOTAL Profiler v0.1.0 prototype
+G's Cyberpunk 2077 TOTAL Profiler v0.1.1 prototype
 
 Unified controller for:
 - GRSP 0.5.0 Public Preview (bundled exact GameRoot build)
@@ -32,7 +32,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 APP_NAME = "G's Cyberpunk 2077 TOTAL Profiler"
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 GRSP_VERSION = "0.5.0"
 CET_PROFILER_VERSION = "3.0.0-alpha6b"
 CORRELATOR_VERSION = "0.1.2"
