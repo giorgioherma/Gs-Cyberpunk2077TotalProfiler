@@ -975,6 +975,15 @@ internal sealed class MainForm : Form
         if (!installVerified)
             throw new InvalidOperationException("Installation completed, but one or more verification checks are still failing. Expand Technical log for details.");
 
+        if (cfg.CaptureResetUtc is null)
+        {
+            // First verified install establishes the "nothing before this belongs to this
+            // measurement session" boundary. Existing CapFrameX history is never treated
+            // as disposable uncollected output.
+            cfg.CaptureResetUtc = DateTimeOffset.UtcNow;
+            cfg.Save();
+        }
+
         Log("Installation VERIFIED. Continue to Measurement.");
     });
 
@@ -1181,16 +1190,25 @@ internal sealed class MainForm : Form
 
             try
             {
-                var cap = ProfilerServices.LatestValidCapXCapture(cfg.CapFrameXResults, cfg.CaptureResetUtc?.UtcDateTime);
-                if (cap is not null && File.Exists(cap))
+                int discardedCapX = 0;
+                var boundary = cfg.CaptureResetUtc?.UtcDateTime;
+                if (boundary is not null && Directory.Exists(cfg.CapFrameXResults))
                 {
-                    File.Delete(cap);
-                    notes.Add($"CapFrameX: discarded uncollected capture {Path.GetFileName(cap)}.");
+                    var uncollected = Directory.EnumerateFiles(cfg.CapFrameXResults, "*.json", SearchOption.AllDirectories)
+                        .Where(path => File.GetLastWriteTimeUtc(path) >= boundary.Value)
+                        .Where(path => ProfilerServices.CapXDurationMs(path) is not null)
+                        .ToList();
+
+                    foreach (var path in uncollected)
+                    {
+                        File.Delete(path);
+                        discardedCapX++;
+                    }
                 }
-                else
-                {
-                    notes.Add("CapFrameX: no uncollected capture to discard.");
-                }
+
+                notes.Add(discardedCapX > 0
+                    ? $"CapFrameX: discarded {discardedCapX} uncollected capture file(s)."
+                    : "CapFrameX: no uncollected capture to discard.");
             }
             catch (Exception ex)
             {
