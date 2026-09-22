@@ -79,6 +79,40 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           Copy-Item (Join-Path $capExe.Directory.FullName '*') $dest -Recurse -Force
 
+          # TOTAL Profiler's bundled CapFrameX always starts in the documented
+          # portable layout. An empty Captures folder is valid before the first run.
+          @'
+{
+  "portable": true,
+  "paths": {
+    "config": "./Portable/Config",
+    "captures": "./Portable/Captures",
+    "screenshots": "./Portable/Screenshots",
+    "logs": "./Portable/Logs",
+    "cloud": "./Portable/Captures/Cloud"
+  }
+}
+'@ | Set-Content -Encoding UTF8 (Join-Path $dest 'portable.json')
+
+          New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Config') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Captures') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Screenshots') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Logs') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Captures\Cloud') | Out-Null
+
+          # DWM is Windows Desktop Window Manager, not TOTAL Profiler. Seed it as
+          # ignored so a freshly launched CapFrameX waits for the game process.
+          @'
+[
+  {
+    "Name": "dwm",
+    "DisplayName": "Desktop Window Manager",
+    "IsBlacklisted": true,
+    "LastCaptureTime": null
+  }
+]
+'@ | Set-Content -Encoding UTF8 (Join-Path $dest 'Portable\Config\Processes.json')
+
           $third = 'publish\THIRD_PARTY\CapFrameX'
           New-Item -ItemType Directory -Force -Path $third | Out-Null
           Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/CXWorld/CapFrameX/v1.8.6/LICENSE' -Headers $headers -OutFile (Join-Path $third 'LICENSE.txt')
@@ -102,6 +136,9 @@ jobs:
           if (!(Test-Path 'publish\components\grsp\red4ext\plugins\redscript_profiler_alpha.dll')) { throw 'GRSP payload missing' }
           if (!(Test-Path 'publish\components\cet\CET_Manager_Core.ps1')) { throw 'CET manager missing' }
           if (!(Test-Path 'publish\Tools\CapFrameX\CapFrameX.exe')) { throw 'Bundled CapFrameX missing' }
+          if (!(Test-Path 'publish\Tools\CapFrameX\portable.json')) { throw 'Bundled CapFrameX portable.json missing' }
+          if (!(Test-Path 'publish\Tools\CapFrameX\Portable\Captures')) { throw 'Bundled CapFrameX Portable Captures folder missing' }
+          if (!(Test-Path 'publish\Tools\CapFrameX\Portable\Config\Processes.json')) { throw 'Bundled CapFrameX process ignore seed missing' }
           if (!(Test-Path 'publish\THIRD_PARTY\CapFrameX\LICENSE.txt')) { throw 'CapFrameX license notice missing' }
 
           $checks = @{
@@ -124,14 +161,14 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
           @(
             "G's Cyberpunk 2077 TOTAL Profiler"
-            'Version: 0.2.4'
+            'Version: 0.2.5'
             "Git commit: $env:GITHUB_SHA"
             'Runtime: .NET 8 self-contained win-x64'
             'Packaging: normal self-contained .NET files; NOT PyInstaller; NOT self-extracting'
             'Python required: no'
             '.NET installation required for TOTAL Profiler: no'
             'Bundled profiler payload hashes: verified during build'
-            'CapFrameX: official upstream portable v1.8.6 bundled by default; existing compatible versions may be linked instead'
+            'CapFrameX: official upstream portable v1.8.6 bundled by default; Portable/Captures precreated; DWM ignored by default; existing compatible versions may be linked instead'
           ) | Set-Content -Encoding UTF8 stage\BUILD_INFO.txt
 
           Push-Location stage
@@ -148,5 +185,5 @@ jobs:
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Gs-Cyberpunk2077-TOTAL-Profiler-0.2.4-NATIVE-Windows-x64
+          name: Gs-Cyberpunk2077-TOTAL-Profiler-0.2.5-NATIVE-Windows-x64
           path: stage
