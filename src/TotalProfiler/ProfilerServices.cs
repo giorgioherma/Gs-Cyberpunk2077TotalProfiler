@@ -9,10 +9,10 @@ namespace GsCyberpunkTotalProfiler;
 internal static class ProfilerServices
 {
     public const string AppName = "G's Cyberpunk 2077 TOTAL Profiler";
-    public const string Version = "0.2.14";
+    public const string Version = "0.2.15";
     public const string GrspVersion = "0.5.0";
     public const string CetVersion = "3.0.0-alpha6b";
-    public const string CorrelatorVersion = "0.2.0-native";
+    public const string CorrelatorVersion = "0.2.1-native";
     public const string CaptureKey = "F11";
     public const string CetExportKey = "F12";
     public const string BundledCapFrameXVersion = "1.9.0";

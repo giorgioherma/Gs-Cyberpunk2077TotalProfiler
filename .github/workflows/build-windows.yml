@@ -8,6 +8,8 @@ on:
       - 'components/**'
       - '.gitattributes'
       - 'README.md'
+      - 'tools/**'
+      - 'patches/**'
       - 'VERSION.txt'
       - '.github/workflows/build-windows.yml'
 
@@ -124,6 +126,14 @@ jobs:
             'TOTAL Profiler does not version-lock CapFrameX; users may link an existing compatible CapFrameX.exe instead.'
           ) | Set-Content -Encoding UTF8 (Join-Path $third 'SOURCE.txt')
 
+      - name: Patch CapFrameX deferred-tab registration race
+        shell: pwsh
+        run: |
+          dotnet restore tools\CapFrameXPatch\CapFrameXPatch.csproj
+          dotnet run --project tools\CapFrameXPatch\CapFrameXPatch.csproj -c Release --no-restore -- publish\Tools\CapFrameX\CapFrameX.exe
+          if (!(Test-Path 'publish\Tools\CapFrameX\TOTALProfiler-CapFrameX-Patch.txt')) { throw 'CapFrameX patch report missing' }
+          Add-Content -Encoding UTF8 'publish\THIRD_PARTY\CapFrameX\SOURCE.txt' 'TOTAL Profiler hotfix: CapFrameXViewRegion.RegisterDeferred is forced through its synchronous fallback path to eliminate the intermittent deferred-tab navigation race.'
+
       - name: Verify native package
         shell: pwsh
         run: |
@@ -135,6 +145,7 @@ jobs:
           if (!(Test-Path 'publish\Tools\CapFrameX\portable.json')) { throw 'Bundled CapFrameX portable.json missing' }
           if (!(Test-Path 'publish\Tools\CapFrameX\Portable\Config\AppSettings.json')) { throw 'Bundled CapFrameX TOTAL Profiler settings missing' }
           if (!(Test-Path 'publish\Tools\CapFrameX\Portable\Captures')) { throw 'Bundled CapFrameX Portable/Captures missing' }
+          if (!(Test-Path 'publish\Tools\CapFrameX\TOTALProfiler-CapFrameX-Patch.txt')) { throw 'Bundled CapFrameX tab-registration patch missing' }
           if (!(Test-Path 'publish\THIRD_PARTY\CapFrameX\LICENSE.txt')) { throw 'CapFrameX license notice missing' }
 
           $checks = @{
@@ -157,14 +168,14 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
           @(
             "G's Cyberpunk 2077 TOTAL Profiler"
-            'Version: 0.2.14'
+            'Version: 0.2.15'
             "Git commit: $env:GITHUB_SHA"
             'Runtime: .NET 8 self-contained win-x64'
             'Packaging: normal self-contained .NET files; NOT PyInstaller; NOT self-extracting'
             'Python required: no'
             '.NET installation required for TOTAL Profiler: no'
             'Bundled profiler payload hashes: verified during build'
-            'CapFrameX: upstream stable portable v1.9.0; real portable.json; F11; CaptureTime=0 unlimited; bundled captures Tools/CapFrameX/Portable/Captures'
+            'CapFrameX: upstream stable portable v1.9.0 + TOTAL Profiler deferred-tab race hotfix; real portable.json; F11; CaptureTime=0 unlimited; bundled captures Tools/CapFrameX/Portable/Captures'
           ) | Set-Content -Encoding UTF8 stage\BUILD_INFO.txt
 
           Push-Location stage
