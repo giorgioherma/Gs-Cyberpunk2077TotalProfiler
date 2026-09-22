@@ -38,6 +38,19 @@ jobs:
             Write-Host "OK $path $actual"
           }
 
+      - name: Parse CET manager PowerShell
+        shell: pwsh
+        run: |
+          $path = (Resolve-Path 'components\cet\CET_Manager_Core.ps1').Path
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw "CET manager PowerShell syntax validation failed."
+          }
+          Write-Host "CET manager PowerShell syntax OK."
+
       - name: Set up .NET 8
         uses: actions/setup-dotnet@v4
         with:
