@@ -10,6 +10,7 @@ internal sealed class AppConfig
     public bool UseBundledCapFrameX { get; set; } = true;
     public string ResultsDirectory { get; set; } = Path.Combine(AppContext.BaseDirectory, "Results");
     public string Scenario { get; set; } = "TEST";
+    public string CaptureName { get; set; } = "TEST";
     public bool CetCoreOnly { get; set; }
     public string LastCapture { get; set; } = "";
     public DateTimeOffset? CaptureResetUtc { get; set; }
@@ -35,10 +36,6 @@ internal sealed class AppConfig
             if (!File.Exists(ConfigPath)) return new AppConfig();
             var cfg = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(ConfigPath), JsonOptions) ?? new AppConfig();
 
-            // Legacy migration. Early builds could accidentally persist the
-            // CapFrameX capture folder as TOTAL Profiler's results folder.
-            // Move only those known legacy defaults to a dedicated Results folder
-            // beside this TOTAL Profiler executable.
             var newDefault = Path.Combine(AppContext.BaseDirectory, "Results");
             var oldDefault = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "G-Cyberpunk2077-TOTAL-Profiler", "Results");
             var sameAsCapFrameX = !string.IsNullOrWhiteSpace(cfg.CapFrameXResults) &&
@@ -50,6 +47,9 @@ internal sealed class AppConfig
             {
                 cfg.ResultsDirectory = newDefault;
             }
+
+            if (string.IsNullOrWhiteSpace(cfg.CaptureName)) cfg.CaptureName = "TEST";
+            if (string.IsNullOrWhiteSpace(cfg.Scenario)) cfg.Scenario = "TEST";
             return cfg;
         }
         catch

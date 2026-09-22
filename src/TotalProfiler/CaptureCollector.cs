@@ -11,7 +11,7 @@ internal static class CaptureCollector
         if (ProfilerServices.IsGameRunning()) throw new InvalidOperationException("Cyberpunk 2077 is still running. Close the game after the second F11 before collecting results.");
         var valid = ProfilerServices.ValidateGameRoot(cfg.GameDirectory);
         if (!valid.Ok) throw new InvalidOperationException(valid.Message);
-        if (!Directory.Exists(cfg.CapFrameXResults)) throw new DirectoryNotFoundException("CapFrameX results folder does not exist. Select it in Setup.");
+        if (!Directory.Exists(cfg.CapFrameXResults)) throw new DirectoryNotFoundException("CapFrameX results folder does not exist. Check Custom paths / advanced setup.");
         Directory.CreateDirectory(cfg.ResultsDirectory);
 
         var minUtc = cfg.CaptureResetUtc?.UtcDateTime;
@@ -35,21 +35,25 @@ internal static class CaptureCollector
         log?.Invoke($"CapFrameX chosen: {Path.GetFileName(cap.Path)} · {(cap.Duration ?? 0) / 1000:F3}s");
 
         var scenario = ProfilerServices.SafeName(cfg.Scenario.Trim().ToUpperInvariant());
+        var captureName = ProfilerServices.SafeName(string.IsNullOrWhiteSpace(cfg.CaptureName) ? cfg.Scenario : cfg.CaptureName);
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-        var capture = Path.Combine(cfg.ResultsDirectory, $"Capture_{stamp}_{scenario}");
+        var capture = Path.Combine(cfg.ResultsDirectory, $"Capture_{stamp}_{captureName}");
         int suffix = 1;
-        while (Directory.Exists(capture)) capture = Path.Combine(cfg.ResultsDirectory, $"Capture_{stamp}_{scenario}_{suffix++}");
+        while (Directory.Exists(capture)) capture = Path.Combine(cfg.ResultsDirectory, $"Capture_{stamp}_{captureName}_{suffix++}");
+
         var raw = Path.Combine(capture, "Raw");
         var grspDst = Path.Combine(raw, "GRSP");
         var cetDst = Path.Combine(raw, "CET");
         var capDst = Path.Combine(raw, "CapFrameX");
-        Directory.CreateDirectory(grspDst); Directory.CreateDirectory(cetDst); Directory.CreateDirectory(capDst);
+        Directory.CreateDirectory(grspDst);
+        Directory.CreateDirectory(cetDst);
+        Directory.CreateDirectory(capDst);
+
         ProfilerServices.CopyTree(grsp, grspDst);
         ProfilerServices.CopyTree(cet, cetDst);
         var capDstFile = Path.Combine(capDst, Path.GetFileName(cap.Path));
         File.Copy(cap.Path, capDstFile, true);
 
-        // Do not clean live/game-side profiler output until the app-side raw copy is verified.
         if (!File.Exists(Path.Combine(grspDst, "GRSP_Summary.csv")))
             throw new InvalidOperationException("GRSP copy verification failed; game-side GRSP results were left untouched.");
         if (!File.Exists(Path.Combine(cetDst, "CET_Runtime_Profile_Markers.csv")))
@@ -59,31 +63,39 @@ internal static class CaptureCollector
 
         try
         {
-            // CET Manager Collect already verifies and removes the live CET CSVs from the
-            // game folder. This removes its temporary app-side staging archive after copy.
             Directory.Delete(cet, true);
             if (Directory.Exists(staging) && !Directory.EnumerateFileSystemEntries(staging).Any()) Directory.Delete(staging);
             log?.Invoke("CET live profiler CSVs cleared from the game folder after verified collection.");
         }
-        catch (Exception ex) { log?.Invoke("CET staging cleanup warning: " + ex.Message); }
+        catch (Exception ex)
+        {
+            log?.Invoke("CET staging cleanup warning: " + ex.Message);
+        }
 
         double? sd = gm.StartUnixMs > 0 && cm.StartUnixMs > 0 ? cm.StartUnixMs - gm.StartUnixMs : null;
         double? dd = gm.DurationMs > 0 && cm.DurationMs > 0 ? cm.DurationMs - gm.DurationMs : null;
         var sync = sd is null || Math.Abs(sd.Value) > 100 || (dd is not null && Math.Abs(dd.Value) > 500) ? "CHECK" : "GOOD";
+
         var manifest = new Dictionary<string, object?>
         {
             ["total_profiler_version"] = ProfilerServices.Version,
             ["created_local"] = DateTimeOffset.Now.ToString("O"),
+            ["capture_name"] = captureName,
             ["scenario"] = scenario,
-            ["components"] = new Dictionary<string,string>
+            ["components"] = new Dictionary<string, string>
             {
                 ["GRSP"] = ProfilerServices.GrspVersion,
                 ["CET_Runtime_Profiler"] = ProfilerServices.CetVersion,
                 ["CapFrameX"] = "external / version not locked",
                 ["Correlator"] = ProfilerServices.CorrelatorVersion
             },
-            ["source_paths"] = new Dictionary<string,string> { ["grsp"] = grsp, ["cet"] = cet, ["capframex"] = cap.Path },
-            ["capture"] = new Dictionary<string,object?>
+            ["source_paths"] = new Dictionary<string, string>
+            {
+                ["grsp"] = grsp,
+                ["cet"] = cet,
+                ["capframex"] = cap.Path
+            },
+            ["capture"] = new Dictionary<string, object?>
             {
                 ["sync_precheck"] = sync,
                 ["grsp_start_unix_ms"] = gm.StartUnixMs,
@@ -97,9 +109,6 @@ internal static class CaptureCollector
         };
         File.WriteAllText(Path.Combine(capture, "CaptureManifest.json"), JsonSerializer.Serialize(manifest, ProfilerServices.JsonOpts) + Environment.NewLine);
 
-        // The complete GRSP raw result now exists in the TOTAL Profiler capture.
-        // Clear GRSP's game-side RESULTS directory so the next run cannot be confused
-        // with stale captures and the game install stays clean.
         try
         {
             var grspResultsRoot = Path.Combine(cfg.GameDirectory, "red4ext", "plugins", "redscript_profiler_alpha", "RESULTS");
@@ -110,12 +119,16 @@ internal static class CaptureCollector
             }
             log?.Invoke("GRSP game-side RESULTS cleared after verified collection.");
         }
-        catch (Exception ex) { log?.Invoke("GRSP game-side cleanup warning: " + ex.Message); }
+        catch (Exception ex)
+        {
+            log?.Invoke("GRSP game-side cleanup warning: " + ex.Message);
+        }
 
         log?.Invoke($"Collected into: {capture}");
         if (sd is not null) log?.Invoke($"GRSP↔CET START delta: {sd:F3} ms");
         if (dd is not null) log?.Invoke($"GRSP↔CET duration delta: {dd:F3} ms");
         log?.Invoke($"Capture precheck: {sync}");
+
         return new CollectResult(capture, sync, sd, dd, cap.Path);
     }
 }

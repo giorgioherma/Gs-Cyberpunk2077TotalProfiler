@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.13 — native Windows controller
+## v0.2.14 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -21,32 +21,20 @@ The app is not a self-extracting executable. The profiler payloads remain visibl
 
 ## Setup
 
-Choose:
+v0.2.14 uses a three-step guided interface:
 
-- Cyberpunk 2077 directory
-- `CapFrameX.exe`
-- CapFrameX results folder (auto-detected when possible; manually selectable for custom layouts)
-- TOTAL Profiler results directory — defaults to `Results\` beside the TOTAL Profiler executable
+1. **SETUP** — select the Cyberpunk 2077 directory. Bundled CapFrameX 1.9.0 and local Results are used automatically. Custom CapFrameX/results paths are collapsed under Advanced setup.
+2. **INSTALL & VERIFY** — choose installation options, install/verify GRSP + CET + CapFrameX configuration, and continue only when the visible checks pass.
+3. **CAPTURE & RESULTS** — name the capture, launch CapFrameX/Cyberpunk, perform the shared F11 capture, collect results, compare, and open the report.
 
-Current capture controls:
+Current capture control:
 
-- **F11** — shared profiling start/stop for GRSP + CET + CapFrameX
-- **F12** — CET result export only
+- **F11 once** — starts GRSP + CET + CapFrameX.
+- **F11 again** — stops all three and CET automatically exports its CSVs.
 
-CET still requires the two bindings to be set once in **CET > Bindings** after installation.
+Before every capture, confirm CapFrameX's **Running processes** contains Cyberpunk 2077 only.
 
-## Capture workflow
-
-1. Launch CapFrameX and Cyberpunk 2077.
-2. Press **F11** to start GRSP + CET + CapFrameX.
-3. Play/test.
-4. Press **F11** again to stop all three. GRSP finalizes on this second F11.
-5. Press **F12** to export CET CSVs.
-6. Close Cyberpunk 2077.
-7. Click **COLLECT RESULTS**.
-8. Click **COMPARE RESULTS**.
-
-The app creates a canonical capture directory containing `Raw/`, `Combined/`, `CaptureManifest.json`, plus a full shareable ZIP.
+The app creates a canonical capture directory containing `Raw/`, `Combined/`, `CaptureManifest.json`, plus the final `*_FULL.zip` inside the same capture folder.
 
 ## Correlator interpretation
 
@@ -139,3 +127,15 @@ TOTAL Profiler now seeds/updates only `CaptureHotKey=F11`, `CaptureTime=0`, and 
 - COLLECT RESULTS verifies the app-side copies, then leaves CET live CSVs cleared and clears GRSP's game-side RESULTS directory.
 - RESET RESULT PATHS was removed from the action bar; paths remain editable through Browse.
 - The final `*_FULL.zip` is stored inside its corresponding `Capture_...\` directory, leaving one top-level item per capture.
+
+
+## v0.2.14 guided workflow UI
+
+- Replaces the single dense dashboard with three focused screens: **Setup → Install & Verify → Capture & Results**.
+- Normal Setup shows only the Cyberpunk 2077 directory; CapFrameX executable/capture path and TOTAL Profiler result path are collapsed under **Custom paths / advanced setup**.
+- Installation options now live on the install screen, including **CET core profiler only — leave existing 0-Engine untouched** and the GRSP scenario tag.
+- The install screen exposes explicit verification for GRSP, CET, 0-Engine, CapFrameX, CET F11 and CapFrameX F11/unlimited configuration.
+- The capture screen adds a user-defined capture name. This name is used in the `Capture_YYYYMMDD-HHMMSS_<name>` folder and manifest.
+- Capture instructions are reduced to the normal workflow: launch CapFrameX + Cyberpunk, verify Cyberpunk is the only CapFrameX capture process, F11 start, play, F11 stop, close game, collect, compare.
+- **RESET CAPTURE STATE** stays on the capture screen as a recovery action. **RESTORE ORIGINAL STATE** is collapsed under Advanced / recovery.
+- The default window is smaller and no longer needs to be maximized for normal use.
