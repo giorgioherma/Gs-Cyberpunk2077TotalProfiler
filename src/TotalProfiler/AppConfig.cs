@@ -7,6 +7,7 @@ internal sealed class AppConfig
     public string GameDirectory { get; set; } = "";
     public string CapFrameXExe { get; set; } = "";
     public string CapFrameXResults { get; set; } = "";
+    public bool UseBundledCapFrameX { get; set; } = true;
     public string ResultsDirectory { get; set; } = Path.Combine(AppContext.BaseDirectory, "Results");
     public string Scenario { get; set; } = "TEST";
     public bool CetCoreOnly { get; set; }

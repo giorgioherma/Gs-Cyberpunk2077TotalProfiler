@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.2 — native Windows controller
+## v0.2.4 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -59,8 +59,8 @@ The project is currently unsigned. A new unsigned executable can still receive S
 
 ## CapFrameX bundling and compatibility
 
-The Windows build bundles the **latest official CapFrameX portable release available from the upstream CXWorld/CapFrameX GitHub Releases page at build time**. The upstream release asset digest is verified when GitHub Actions provides it, and the upstream CapFrameX license is shipped with the artifact.
+The Windows build bundles the official **CapFrameX 1.8.6 portable release** by default. This is the version used during TOTAL Profiler validation. Its upstream SHA-256 is verified during every GitHub Actions build, and the upstream CapFrameX license is shipped with the artifact.
 
-TOTAL Profiler does **not** version-lock CapFrameX. Users may use the bundled copy or select an existing `CapFrameX.exe`, including previous compatible versions. TOTAL Profiler only depends on the capture data it needs for correlation; unsupported future capture-schema changes should be reported as a compatibility error rather than rejected by version number.
+TOTAL Profiler does **not** version-lock CapFrameX. The bundled 1.8.6 copy is selected by default, but users may select an existing `CapFrameX.exe` from another compatible version. CapFrameX 1.8.6 requires the .NET 9 Desktop Runtime; CapFrameX 1.9+ requires the .NET 10 Desktop Runtime. TOTAL Profiler only depends on the capture data it needs for correlation; unsupported future capture-schema changes should be reported as a compatibility error rather than rejected by version number.
 
 CapFrameX remains a third-party project and is credited to its upstream authors.

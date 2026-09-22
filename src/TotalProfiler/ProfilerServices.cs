@@ -9,12 +9,13 @@ namespace GsCyberpunkTotalProfiler;
 internal static class ProfilerServices
 {
     public const string AppName = "G's Cyberpunk 2077 TOTAL Profiler";
-    public const string Version = "0.2.3";
+    public const string Version = "0.2.4";
     public const string GrspVersion = "0.5.0";
     public const string CetVersion = "3.0.0-alpha6b";
     public const string CorrelatorVersion = "0.2.0-native";
     public const string CaptureKey = "F11";
     public const string CetExportKey = "F12";
+    public const string BundledCapFrameXVersion = "1.8.6";
     public const string GrspDllSha256 = "58b6caa3dccb03067d17a5d40ac049ba90cb74862b4302d7d2b5f91c5fca415d";
 
     public static string ComponentsDirectory => Path.Combine(AppContext.BaseDirectory, "components");

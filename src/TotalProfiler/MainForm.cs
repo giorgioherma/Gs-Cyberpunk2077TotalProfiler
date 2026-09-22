@@ -53,11 +53,11 @@ internal sealed class MainForm : Form
 
         var titlePanel = new Panel { Dock = DockStyle.Fill, Height = 62 };
         var title = new Label { Text = ProfilerServices.AppName, Font = new Font("Segoe UI Semibold", 18F), AutoSize = true, Location = new Point(0, 0) };
-        var sub = new Label { Text = $"GRSP {ProfilerServices.GrspVersion} + CET Runtime Profiler {ProfilerServices.CetVersion} + external CapFrameX + native correlator {ProfilerServices.CorrelatorVersion}", AutoSize = true, Location = new Point(2, 37) };
+        var sub = new Label { Text = $"GRSP {ProfilerServices.GrspVersion} + CET Runtime Profiler {ProfilerServices.CetVersion} + bundled/external CapFrameX + native correlator {ProfilerServices.CorrelatorVersion}", AutoSize = true, Location = new Point(2, 37) };
         titlePanel.Controls.Add(title); titlePanel.Controls.Add(sub); outer.Controls.Add(titlePanel);
 
         var setup = Group("Setup");
-        var setupGrid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 5, AutoSize = true };
+        var setupGrid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 6, AutoSize = true };
         setupGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
         setupGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         setupGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
@@ -74,7 +74,21 @@ internal sealed class MainForm : Form
         settings.Controls.Add(new Label { Text = "Scenario:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
         scenarioBox.Width = 155; settings.Controls.Add(scenarioBox);
         coreOnly.Text = "CET core profiler only — leave 0-Engine untouched"; coreOnly.AutoSize = true; coreOnly.Margin = new Padding(20, 3, 0, 0); settings.Controls.Add(coreOnly);
+
+        var useBundledCapX = new Button { Text = $"Use bundled CapFrameX {ProfilerServices.BundledCapFrameXVersion}", AutoSize = true, Height = 27, Margin = new Padding(20, 0, 0, 0) };
+        useBundledCapX.Click += (_, _) => UseBundledCapFrameX();
+        settings.Controls.Add(useBundledCapX);
+
         setupGrid.Controls.Add(settings, 0, 4); setupGrid.SetColumnSpan(settings, 4);
+
+        var capRuntimeNote = new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(1060, 0),
+            Text = $"Bundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion} official portable release — requires .NET 9 Desktop Runtime. CapFrameX 1.9+ requires .NET 10 Desktop Runtime. Browse may link any compatible existing version."
+        };
+        setupGrid.Controls.Add(capRuntimeNote, 0, 5); setupGrid.SetColumnSpan(capRuntimeNote, 4);
+
         setup.Controls.Add(setupGrid); outer.Controls.Add(setup);
 
         var status = Group("Profiler status");
@@ -96,7 +110,7 @@ internal sealed class MainForm : Form
         af.Controls.AddRange([installButton, collectButton, compareButton, openLatest, restoreCet, restoreGrsp]); actions.Controls.Add(af); outer.Controls.Add(actions);
 
         var workflow = Group("Capture workflow");
-        var wf = new Label { AutoSize = true, MaximumSize = new Size(1060, 0), Text = "1) INSTALL PROFILERS and confirm Install check = VERIFIED ✓.   2) Launch CapFrameX and Cyberpunk 2077.   3) F11 starts GRSP + CET + CapFrameX.   4) F11 stops all three.   5) F12 exports CET CSVs.   6) Close the game.   7) COLLECT RESULTS.   8) COMPARE RESULTS.\r\n\r\nCET note: after first profiler install, bind 'Profiler: START / PAUSE / RESUME' to F11 and 'Profiler: CREATE CSV' to F12 in CET > Bindings. Bundled CapFrameX is the current official upstream portable release; Browse may link any existing compatible CapFrameX version." };
+        var wf = new Label { AutoSize = true, MaximumSize = new Size(1060, 0), Text = $"1) INSTALL PROFILERS and confirm Install check = VERIFIED ✓.   2) Launch CapFrameX and Cyberpunk 2077.   3) F11 starts GRSP + CET + CapFrameX.   4) F11 stops all three.   5) F12 exports CET CSVs.   6) Close the game.   7) COLLECT RESULTS.   8) COMPARE RESULTS.\r\n\r\nCET note: after first profiler install, bind 'Profiler: START / PAUSE / RESUME' to F11 and 'Profiler: CREATE CSV' to F12 in CET > Bindings. Bundled default is CapFrameX {ProfilerServices.BundledCapFrameXVersion}; Browse may link any compatible version." };
         workflow.Controls.Add(wf); outer.Controls.Add(workflow);
 
         var logGroup = Group("Log");
@@ -125,10 +139,9 @@ internal sealed class MainForm : Form
 
     private void LoadConfigIntoUi()
     {
-        // Prefer the bundled official CapFrameX on first run, but never overwrite a
-        // valid user-linked existing CapFrameX installation.
-        if ((string.IsNullOrWhiteSpace(cfg.CapFrameXExe) || !File.Exists(cfg.CapFrameXExe)) &&
-            File.Exists(ProfilerServices.BundledCapFrameXExe))
+        // Bundled CapFrameX is the default. A user can explicitly choose an existing
+        // installation with Browse; that preference then persists.
+        if (cfg.UseBundledCapFrameX && File.Exists(ProfilerServices.BundledCapFrameXExe))
         {
             cfg.CapFrameXExe = ProfilerServices.BundledCapFrameXExe;
             var detected = ProfilerServices.DetectCapFrameXPath(cfg.CapFrameXExe).Captures;
@@ -144,7 +157,23 @@ internal sealed class MainForm : Form
     }
 
     private void BrowseGame() { using var d = new FolderBrowserDialog { Description = "Select Cyberpunk 2077 game directory", SelectedPath = gameBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { gameBox.Text = d.SelectedPath; SaveConfig(); _ = RefreshStatusAsync(); } }
-    private void BrowseCapExe() { using var d = new OpenFileDialog { Title = "Select an existing CapFrameX.exe (any compatible version)", Filter = "CapFrameX|CapFrameX.exe|Executable|*.exe|All files|*.*", FileName = "CapFrameX.exe" }; if (d.ShowDialog(this) == DialogResult.OK) { capExeBox.Text = d.FileName; var detected = ProfilerServices.DetectCapFrameXPath(d.FileName).Captures; if (!string.IsNullOrWhiteSpace(detected)) capResultsBox.Text = detected; SaveConfig(); _ = RefreshStatusAsync(); } }
+    private void BrowseCapExe() { using var d = new OpenFileDialog { Title = "Select an existing CapFrameX.exe (any compatible version)", Filter = "CapFrameX|CapFrameX.exe|Executable|*.exe|All files|*.*", FileName = "CapFrameX.exe" }; if (d.ShowDialog(this) == DialogResult.OK) { cfg.UseBundledCapFrameX = false; capExeBox.Text = d.FileName; var detected = ProfilerServices.DetectCapFrameXPath(d.FileName).Captures; if (!string.IsNullOrWhiteSpace(detected)) capResultsBox.Text = detected; SaveConfig(); _ = RefreshStatusAsync(); } }
+
+    private void UseBundledCapFrameX()
+    {
+        if (!File.Exists(ProfilerServices.BundledCapFrameXExe))
+        {
+            MessageBox.Show(this, "Bundled CapFrameX was not found in this TOTAL Profiler package.", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        cfg.UseBundledCapFrameX = true;
+        capExeBox.Text = ProfilerServices.BundledCapFrameXExe;
+        var detected = ProfilerServices.DetectCapFrameXPath(capExeBox.Text).Captures;
+        if (!string.IsNullOrWhiteSpace(detected)) capResultsBox.Text = detected;
+        SaveConfig();
+        _ = RefreshStatusAsync();
+    }
     private void BrowseCapResults() { using var d = new FolderBrowserDialog { Description = "Select CapFrameX capture/results folder", SelectedPath = capResultsBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { capResultsBox.Text = d.SelectedPath; SaveConfig(); } }
     private void BrowseResults() { using var d = new FolderBrowserDialog { Description = "Select TOTAL Profiler results folder", SelectedPath = resultsBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { resultsBox.Text = d.SelectedPath; SaveConfig(); } }
     private void LaunchCapX() { if (File.Exists(capExeBox.Text)) Process.Start(new ProcessStartInfo(capExeBox.Text) { UseShellExecute = true }); else MessageBox.Show(this, "Select CapFrameX.exe first.", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information); }
@@ -207,7 +236,7 @@ internal sealed class MainForm : Form
                 if (File.Exists(snap.CapFrameXExe))
                 {
                     bool bundled = string.Equals(Path.GetFullPath(snap.CapFrameXExe), Path.GetFullPath(ProfilerServices.BundledCapFrameXExe), StringComparison.OrdinalIgnoreCase);
-                    cap = (bundled ? "BUNDLED ✓" : "LINKED EXISTING ✓") + (Directory.Exists(snap.CapFrameXResults) ? " · results FOUND ✓" : " · results NOT FOUND");
+                    cap = (bundled ? $"BUNDLED {ProfilerServices.BundledCapFrameXVersion} ✓" : "LINKED EXISTING ✓") + (Directory.Exists(snap.CapFrameXResults) ? " · results FOUND ✓" : " · results NOT FOUND");
                 }
 
                 if (grspOk && cetOk && controlsOk)
