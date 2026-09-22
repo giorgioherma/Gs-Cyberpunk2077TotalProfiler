@@ -54,13 +54,13 @@ jobs:
             -p:DebugSymbols=false `
             -o publish
 
-      - name: Bundle tested official CapFrameX 1.8.6 portable release
+      - name: Bundle stable official CapFrameX 1.9.0 portable release
         shell: pwsh
         run: |
           $headers = @{ 'User-Agent' = 'Gs-Cyberpunk2077-TOTAL-Profiler-build' }
-          $tag = 'v1.8.6'
-          $assetUrl = 'https://github.com/CXWorld/CapFrameX/releases/download/v1.8.6/release_1.8.6_portable.zip'
-          $expected = '980bee035c7236de7eecf4309c7738c8883fe194a6d5a794de7399d5e1ee3ad1'
+          $tag = 'v1.9.0'
+          $assetUrl = 'https://github.com/CXWorld/CapFrameX/releases/download/v1.9.0/release_1.9.0_portable.zip'
+          $expected = '00d56035681b975cee2fa392b93024ad60aaf9c0d1fcea91e8cb9c0fb6f1803a'
 
           Write-Host "Bundling official CapFrameX $tag portable release"
           Invoke-WebRequest -Uri $assetUrl -Headers $headers -OutFile capframex-portable.zip
@@ -81,16 +81,16 @@ jobs:
 
           $third = 'publish\THIRD_PARTY\CapFrameX'
           New-Item -ItemType Directory -Force -Path $third | Out-Null
-          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/CXWorld/CapFrameX/v1.8.6/LICENSE' -Headers $headers -OutFile (Join-Path $third 'LICENSE.txt')
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/CXWorld/CapFrameX/v1.9.0/LICENSE' -Headers $headers -OutFile (Join-Path $third 'LICENSE.txt')
 
           @(
             'CapFrameX is a third-party open-source project and is not part of TOTAL Profiler.'
             'Upstream: https://github.com/CXWorld/CapFrameX'
-            'Bundled release: v1.8.6'
-            'Bundled asset: release_1.8.6_portable.zip'
+            'Bundled release: v1.9.0'
+            'Bundled asset: release_1.9.0_portable.zip'
             'Upstream asset SHA256: 980bee035c7236de7eecf4309c7738c8883fe194a6d5a794de7399d5e1ee3ad1'
-            'Release URL: https://github.com/CXWorld/CapFrameX/releases/tag/v1.8.6'
-            'Runtime: CapFrameX 1.8.6 requires .NET 9 Desktop Runtime. CapFrameX 1.9+ requires .NET 10 Desktop Runtime.'
+            'Release URL: https://github.com/CXWorld/CapFrameX/releases/tag/v1.9.0'
+            'Runtime: CapFrameX 1.9.0 requires .NET 10 Desktop Runtime.'
             'TOTAL Profiler does not version-lock CapFrameX; users may link an existing compatible CapFrameX.exe instead.'
           ) | Set-Content -Encoding UTF8 (Join-Path $third 'SOURCE.txt')
 
@@ -124,14 +124,14 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
           @(
             "G's Cyberpunk 2077 TOTAL Profiler"
-            'Version: 0.2.8'
+            'Version: 0.2.9'
             "Git commit: $env:GITHUB_SHA"
             'Runtime: .NET 8 self-contained win-x64'
             'Packaging: normal self-contained .NET files; NOT PyInstaller; NOT self-extracting'
             'Python required: no'
             '.NET installation required for TOTAL Profiler: no'
             'Bundled profiler payload hashes: verified during build'
-            'CapFrameX: official upstream portable v1.8.6; bundled capture path Tools/CapFrameX/Portable/Captures; existing compatible versions may be linked instead'
+            'CapFrameX: official upstream stable portable v1.9.0; bundled capture path Tools/CapFrameX/Portable/Captures; existing compatible versions may be linked instead'
           ) | Set-Content -Encoding UTF8 stage\BUILD_INFO.txt
 
           Push-Location stage

@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.8 — native Windows controller
+## v0.2.9 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -59,9 +59,9 @@ The project is currently unsigned. A new unsigned executable can still receive S
 
 ## CapFrameX bundling and compatibility
 
-The Windows build bundles the official **CapFrameX 1.8.6 portable release** by default. This is the version used during TOTAL Profiler validation. Its upstream SHA-256 is verified during every GitHub Actions build, and the upstream CapFrameX license is shipped with the artifact.
+The Windows build bundles the official **CapFrameX 1.9.0 portable release** by default. This is the version used during TOTAL Profiler validation. Its upstream SHA-256 is verified during every GitHub Actions build, and the upstream CapFrameX license is shipped with the artifact.
 
-TOTAL Profiler does **not** version-lock CapFrameX. The bundled 1.8.6 copy is selected by default, but users may select an existing `CapFrameX.exe` from another compatible version. CapFrameX 1.8.6 requires the .NET 9 Desktop Runtime; CapFrameX 1.9+ requires the .NET 10 Desktop Runtime. TOTAL Profiler only depends on the capture data it needs for correlation; unsupported future capture-schema changes should be reported as a compatibility error rather than rejected by version number.
+TOTAL Profiler does **not** version-lock CapFrameX. The bundled 1.8.6 copy is selected by default, but users may select an existing `CapFrameX.exe` from another compatible version. CapFrameX 1.9.0 requires the .NET 10 Desktop Runtime. TOTAL Profiler only depends on the capture data it needs for correlation; unsupported future capture-schema changes should be reported as a compatibility error rather than rejected by version number.
 
 CapFrameX remains a third-party project and is credited to its upstream authors.
 
@@ -90,3 +90,12 @@ Bundled CapFrameX results default to `Tools\CapFrameX\Portable\Captures`. An emp
 The Setup screen provides **Reset** for the CapFrameX results path and **Reset TOTAL results** for the TOTAL Profiler output path.
 
 While profiling, CapFrameX's **Running processes** list should contain Cyberpunk 2077 only. If another process appears there, add it to CapFrameX's ignore list before recording the test.
+
+
+## v0.2.9 UI / restore / CapFrameX updates
+
+- Bundled default moved to the latest full stable **CapFrameX 1.9.0** portable release.
+- TOTAL Profiler launches CapFrameX with its own folder as the working directory so CapFrameX relative resources, including capture start/stop sounds, resolve correctly.
+- The CapFrameX process-list warning now appears beside the capture workflow/CET binding instructions.
+- **RESET RESULT PATHS** resets both result locations without deleting captured data.
+- **RESTORE ORIGINAL STATE** replaces separate CET/GRSP restore controls and restores all TOTAL Profiler-managed profiler state in one operation. Capture/result folders are preserved.

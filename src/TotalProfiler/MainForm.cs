@@ -64,7 +64,7 @@ internal sealed class MainForm : Form
         setupGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
         AddPathRow(setupGrid, 0, "Cyberpunk 2077 directory", gameBox, BrowseGame);
         AddPathRow(setupGrid, 1, "CapFrameX.exe (bundled / existing)", capExeBox, BrowseCapExe, "Launch", LaunchCapX);
-        AddPathRow(setupGrid, 2, "CapFrameX results", capResultsBox, BrowseCapResults, "Reset", ResetCapFrameXResults);
+        AddPathRow(setupGrid, 2, "CapFrameX results", capResultsBox, BrowseCapResults);
         AddPathRow(setupGrid, 3, "TOTAL Profiler results", resultsBox, BrowseResults, "Open", () => ProfilerServices.OpenPath(resultsBox.Text));
         var settings = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Padding = new Padding(0, 7, 0, 0) };
         settings.Controls.Add(new Label { Text = "Shared profiling key:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
@@ -79,29 +79,15 @@ internal sealed class MainForm : Form
         useBundledCapX.Click += (_, _) => UseBundledCapFrameX();
         settings.Controls.Add(useBundledCapX);
 
-        var resetTotalResults = new Button { Text = "Reset TOTAL results", AutoSize = true, Height = 27, Margin = new Padding(8, 0, 0, 0) };
-        resetTotalResults.Click += (_, _) => ResetTotalResults();
-        settings.Controls.Add(resetTotalResults);
-
         setupGrid.Controls.Add(settings, 0, 4); setupGrid.SetColumnSpan(settings, 4);
 
         var capRuntimeNote = new Label
         {
             AutoSize = true,
             MaximumSize = new Size(1060, 0),
-            Text = $"Bundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion} official portable release — requires .NET 9 Desktop Runtime. CapFrameX 1.9+ requires .NET 10 Desktop Runtime. Bundled captures: .\\Tools\\CapFrameX\\Portable\\Captures. Browse may link any compatible existing version."
+            Text = $"Bundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion} stable portable release — requires .NET 10 Desktop Runtime. Bundled captures: .\\Tools\\CapFrameX\\Portable\\Captures. Browse may link any compatible existing version."
         };
         setupGrid.Controls.Add(capRuntimeNote, 0, 5); setupGrid.SetColumnSpan(capRuntimeNote, 4);
-
-        var processNote = new Label
-        {
-            AutoSize = true,
-            MaximumSize = new Size(1060, 0),
-            Font = new Font("Segoe UI Semibold", 9F),
-            Text = "CapFrameX Running processes: Cyberpunk 2077 should be the only listed app while profiling. If another process appears, move it to the CapFrameX ignore list."
-        };
-        setupGrid.RowCount = 7;
-        setupGrid.Controls.Add(processNote, 0, 6); setupGrid.SetColumnSpan(processNote, 4);
 
         setup.Controls.Add(setupGrid); outer.Controls.Add(setup);
 
@@ -119,12 +105,12 @@ internal sealed class MainForm : Form
         collectButton.Text = "COLLECT RESULTS"; collectButton.Width = 155; collectButton.Height = 34; collectButton.Click += async (_, _) => await CollectAsync();
         compareButton.Text = "COMPARE RESULTS"; compareButton.Width = 155; compareButton.Height = 34; compareButton.Click += async (_, _) => await CompareAsync();
         var openLatest = new Button { Text = "Open latest", Width = 115, Height = 34 }; openLatest.Click += (_, _) => OpenLatest();
-        var restoreCet = new Button { Text = "Restore CET", Width = 115, Height = 34 }; restoreCet.Click += async (_, _) => await RestoreCetAsync();
-        var restoreGrsp = new Button { Text = "Restore GRSP DLL", Width = 135, Height = 34 }; restoreGrsp.Click += async (_, _) => await RestoreGrspAsync();
-        af.Controls.AddRange([installButton, collectButton, compareButton, openLatest, restoreCet, restoreGrsp]); actions.Controls.Add(af); outer.Controls.Add(actions);
+        var resetResults = new Button { Text = "RESET RESULT PATHS", Width = 155, Height = 34 }; resetResults.Click += (_, _) => ResetResultPaths();
+        var restoreAll = new Button { Text = "RESTORE ORIGINAL STATE", Width = 190, Height = 34 }; restoreAll.Click += async (_, _) => await RestoreAllAsync();
+        af.Controls.AddRange([installButton, collectButton, compareButton, openLatest, resetResults, restoreAll]); actions.Controls.Add(af); outer.Controls.Add(actions);
 
         var workflow = Group("Capture workflow");
-        var wf = new Label { AutoSize = true, MaximumSize = new Size(1060, 0), Text = $"1) INSTALL PROFILERS and confirm Install check = VERIFIED ✓.   2) Launch CapFrameX and Cyberpunk 2077.   3) F11 starts GRSP + CET + CapFrameX.   4) F11 stops all three.   5) F12 exports CET CSVs.   6) Close the game.   7) COLLECT RESULTS.   8) COMPARE RESULTS.\r\n\r\nCET note: after first profiler install, bind 'Profiler: START / PAUSE / RESUME' to F11 and 'Profiler: CREATE CSV' to F12 in CET > Bindings. Bundled default is CapFrameX {ProfilerServices.BundledCapFrameXVersion}; Browse may link any compatible version." };
+        var wf = new Label { AutoSize = true, MaximumSize = new Size(1060, 0), Text = $"1) INSTALL PROFILERS and confirm Install check = VERIFIED ✓.   2) Launch CapFrameX and Cyberpunk 2077.   3) F11 starts GRSP + CET + CapFrameX.   4) F11 stops all three.   5) F12 exports CET CSVs.   6) Close the game.   7) COLLECT RESULTS.   8) COMPARE RESULTS.\r\n\r\nCET note: after first profiler install, bind 'Profiler: START / PAUSE / RESUME' to F11 and 'Profiler: CREATE CSV' to F12 in CET > Bindings.\r\nCapFrameX note: while profiling, Cyberpunk 2077 should be the only app in CapFrameX 'Running processes'. If anything else is listed, move it to the CapFrameX ignore list before capture.\r\nBundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion}; Browse may link any compatible version." };
         workflow.Controls.Add(wf); outer.Controls.Add(workflow);
 
         var logGroup = Group("Log");
@@ -188,34 +174,47 @@ internal sealed class MainForm : Form
         SaveConfig();
         _ = RefreshStatusAsync();
     }
-    private void ResetCapFrameXResults()
+    private void ResetResultPaths()
     {
-        var target = cfg.UseBundledCapFrameX
+        string? capTarget = cfg.UseBundledCapFrameX
             ? ProfilerServices.BundledCapFrameXResults
             : ProfilerServices.DetectCapFrameXPath(capExeBox.Text).Captures;
 
-        if (string.IsNullOrWhiteSpace(target))
+        if (!string.IsNullOrWhiteSpace(capTarget))
         {
-            MessageBox.Show(this, "Could not determine the CapFrameX capture folder automatically. Use Browse instead.", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
+            capResultsBox.Text = capTarget;
+            Directory.CreateDirectory(capTarget);
         }
 
-        capResultsBox.Text = target;
-        Directory.CreateDirectory(target);
-        SaveConfig();
-        _ = RefreshStatusAsync();
-    }
-
-    private void ResetTotalResults()
-    {
         resultsBox.Text = ProfilerServices.DefaultResultsDirectory;
         Directory.CreateDirectory(resultsBox.Text);
         SaveConfig();
+        _ = RefreshStatusAsync();
+
+        MessageBox.Show(this,
+            string.IsNullOrWhiteSpace(capTarget)
+                ? $"TOTAL Profiler results reset to:\r\n{resultsBox.Text}\r\n\r\nCapFrameX results could not be auto-detected; use Browse for that path."
+                : $"Result paths reset.\r\n\r\nCapFrameX:\r\n{capResultsBox.Text}\r\n\r\nTOTAL Profiler:\r\n{resultsBox.Text}",
+            ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void BrowseCapResults() { using var d = new FolderBrowserDialog { Description = "Select CapFrameX capture/results folder", SelectedPath = capResultsBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { capResultsBox.Text = d.SelectedPath; SaveConfig(); _ = RefreshStatusAsync(); } }
     private void BrowseResults() { using var d = new FolderBrowserDialog { Description = "Select TOTAL Profiler results folder", SelectedPath = resultsBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { resultsBox.Text = d.SelectedPath; SaveConfig(); } }
-    private void LaunchCapX() { if (File.Exists(capExeBox.Text)) Process.Start(new ProcessStartInfo(capExeBox.Text) { UseShellExecute = true }); else MessageBox.Show(this, "Select CapFrameX.exe first.", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information); }
+    private void LaunchCapX()
+    {
+        if (!File.Exists(capExeBox.Text))
+        {
+            MessageBox.Show(this, "Select CapFrameX.exe first.", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var exe = Path.GetFullPath(capExeBox.Text);
+        Process.Start(new ProcessStartInfo(exe)
+        {
+            UseShellExecute = true,
+            WorkingDirectory = Path.GetDirectoryName(exe)!
+        });
+    }
 
     private void Log(string msg)
     {
@@ -364,16 +363,68 @@ internal sealed class MainForm : Form
         MessageBox.Show(this, $"Correlation complete.\r\n\r\nReport:\r\n{result.Report}\r\n\r\nFull shareable capture package:\r\n{fullZip}", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
     });
 
-    private async Task RestoreCetAsync()
+    private async Task RestoreAllAsync()
     {
-        if (MessageBox.Show(this, "Restore the original CET / managed 0-Engine state now?\r\n\r\nCyberpunk 2077 must be closed.", ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-        await RunBusy(async () => { var outDir = Path.Combine(cfg.ResultsDirectory, "CET_Restore_Archive"); Directory.CreateDirectory(outDir); using var r = await ProfilerServices.CallCetAsync("Restore", cfg.GameDirectory, outDir); Log("CET restore completed." + (string.IsNullOrWhiteSpace(J(r.RootElement,"archived")) ? "" : " Final CET results: " + J(r.RootElement,"archived"))); await RefreshStatusAsync(); MessageBox.Show(this, "CET managed state restored.", ProfilerServices.AppName); });
-    }
+        if (MessageBox.Show(this,
+            "Restore everything TOTAL Profiler changed back to its original state?\r\n\r\n" +
+            "This restores CET / managed 0-Engine state, GRSP DLL state, and any CapFrameX settings file backed up by TOTAL Profiler.\r\n\r\n" +
+            "Capture/result folders are NOT deleted. Cyberpunk 2077 must be closed.",
+            ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
-    private async Task RestoreGrspAsync()
-    {
-        if (MessageBox.Show(this, "Restore the GRSP DLL state managed by TOTAL Profiler?\r\n\r\nCapture result folders will NOT be deleted.", ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-        await RunBusy(async () => { var msg = await Task.Run(() => ProfilerServices.RestoreGrsp(cfg.GameDirectory)); Log(msg); await RefreshStatusAsync(); MessageBox.Show(this, msg, ProfilerServices.AppName); });
+        await RunBusy(async () =>
+        {
+            if (ProfilerServices.IsGameRunning()) throw new InvalidOperationException("Cyberpunk 2077 is running. Close it before restoring.");
+
+            var notes = new List<string>();
+            bool failed = false;
+
+            try
+            {
+                using var status = await ProfilerServices.CallCetAsync("Status", cfg.GameDirectory);
+                if (J(status.RootElement, "managed") == "True")
+                {
+                    var outDir = Path.Combine(cfg.ResultsDirectory, "CET_Restore_Archive");
+                    Directory.CreateDirectory(outDir);
+                    using var r = await ProfilerServices.CallCetAsync("Restore", cfg.GameDirectory, outDir);
+                    var archived = J(r.RootElement, "archived");
+                    notes.Add("CET / 0-Engine: restored" + (string.IsNullOrWhiteSpace(archived) ? "." : $" · final CET results archived to {archived}"));
+                }
+                else notes.Add("CET / 0-Engine: no TOTAL Profiler managed state was present.");
+            }
+            catch (Exception ex)
+            {
+                failed = true;
+                notes.Add("CET / 0-Engine: RESTORE FAILED · " + ex.Message.Split('\n').Last());
+            }
+
+            try
+            {
+                var msg = await Task.Run(() => ProfilerServices.RestoreGrsp(cfg.GameDirectory));
+                notes.Add("GRSP: " + msg);
+            }
+            catch (Exception ex)
+            {
+                failed = true;
+                notes.Add("GRSP: RESTORE FAILED · " + ex.Message);
+            }
+
+            try
+            {
+                var msg = await Task.Run(() => ProfilerServices.RestoreCapFrameXConfigBestEffort(cfg.CapFrameXExe));
+                notes.Add("CapFrameX: " + msg);
+            }
+            catch (Exception ex)
+            {
+                failed = true;
+                notes.Add("CapFrameX: RESTORE FAILED · " + ex.Message);
+            }
+
+            foreach (var note in notes) Log(note);
+            await RefreshStatusAsync();
+
+            MessageBox.Show(this, string.Join("\r\n\r\n", notes), ProfilerServices.AppName,
+                MessageBoxButtons.OK, failed ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+        });
     }
 
     private void OpenLatest()

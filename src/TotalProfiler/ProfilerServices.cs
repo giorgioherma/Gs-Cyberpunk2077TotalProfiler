@@ -9,13 +9,13 @@ namespace GsCyberpunkTotalProfiler;
 internal static class ProfilerServices
 {
     public const string AppName = "G's Cyberpunk 2077 TOTAL Profiler";
-    public const string Version = "0.2.8";
+    public const string Version = "0.2.9";
     public const string GrspVersion = "0.5.0";
     public const string CetVersion = "3.0.0-alpha6b";
     public const string CorrelatorVersion = "0.2.0-native";
     public const string CaptureKey = "F11";
     public const string CetExportKey = "F12";
-    public const string BundledCapFrameXVersion = "1.8.6";
+    public const string BundledCapFrameXVersion = "1.9.0";
     public const string GrspDllSha256 = "58b6caa3dccb03067d17a5d40ac049ba90cb74862b4302d7d2b5f91c5fca415d";
 
     public static string ComponentsDirectory => Path.Combine(AppContext.BaseDirectory, "components");
@@ -121,6 +121,29 @@ internal static class ProfilerServices
             catch { }
         }
         return "CapFrameX capture-hotkey setting was not found. Set Capture Hotkey to F11 in CapFrameX.";
+    }
+
+    public static string RestoreCapFrameXConfigBestEffort(string exePath)
+    {
+        var (_, cfg) = DetectCapFrameXPath(exePath);
+        if (cfg is null || !Directory.Exists(cfg)) return "No CapFrameX settings folder was found; nothing to restore.";
+
+        int restored = 0;
+        foreach (var backup in Directory.EnumerateFiles(cfg, "*.TOTALProfiler.bak", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                var original = backup[..^".TOTALProfiler.bak".Length];
+                File.Copy(backup, original, true);
+                File.Delete(backup);
+                restored++;
+            }
+            catch { }
+        }
+
+        return restored > 0
+            ? $"Restored {restored} CapFrameX settings backup(s)."
+            : "No TOTAL Profiler CapFrameX settings backup was present.";
     }
 
     private static bool SetJsonKeyRecursive(System.Text.Json.Nodes.JsonNode node, HashSet<string> names, string value)
