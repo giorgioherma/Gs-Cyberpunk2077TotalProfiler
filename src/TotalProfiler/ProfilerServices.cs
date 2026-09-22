@@ -9,7 +9,7 @@ namespace GsCyberpunkTotalProfiler;
 internal static class ProfilerServices
 {
     public const string AppName = "G's Cyberpunk 2077 TOTAL Profiler";
-    public const string Version = "0.2.17";
+    public const string Version = "0.2.18";
     public const string GrspVersion = "0.5.0";
     public const string CetVersion = "3.0.0-alpha6b";
     public const string CorrelatorVersion = "0.2.1-native";
@@ -158,7 +158,22 @@ internal static class ProfilerServices
             obj["CaptureTime"] = 0.0;
             obj["CaptureDelay"] = 0.0;
 
-            File.WriteAllText(path, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
+            // CapFrameX 1.9.1 beta's JsonSettingsStorage deserializes JSON numbers into CLR
+            // Int32 vs Double based on the literal. Its CaptureView requires CaptureTime and
+            // CaptureDelay to be Double. System.Text.Json may emit 0.0 as the integer-looking
+            // literal 0, which makes CaptureView fail to construct. Force explicit decimal
+            // literals for the two Double settings we own.
+            var capJson = obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            capJson = System.Text.RegularExpressions.Regex.Replace(
+                capJson,
+                "(\\\"CaptureTime\\\"\\s*:\\s*)0(?=\\s*[,}])",
+                "$10.0");
+            capJson = System.Text.RegularExpressions.Regex.Replace(
+                capJson,
+                "(\\\"CaptureDelay\\\"\\s*:\\s*)0(?=\\s*[,}])",
+                "$10.0");
+
+            File.WriteAllText(path, capJson + Environment.NewLine);
             return bundled
                 ? "Bundled CapFrameX portable mode verified: F11 · unlimited capture (0 s) · Portable/Captures."
                 : "Linked CapFrameX configured: F11 · unlimited capture (0 s).";

@@ -56,7 +56,7 @@ jobs:
             -p:DebugSymbols=false `
             -o publish
 
-      - name: Bundle stable official CapFrameX 1.9.0 portable release
+      - name: Bundle official CapFrameX 1.9.1 beta portable release
         shell: pwsh
         run: |
           $headers = @{ 'User-Agent' = 'Gs-Cyberpunk2077-TOTAL-Profiler-build' }
@@ -104,12 +104,20 @@ jobs:
 
           # Seed only TOTAL Profiler's required capture controls.
           # CapFrameX supplies all other settings from its own defaults.
-          $appSettings = [ordered]@{
-            CaptureHotKey = 'F11'
-            CaptureTime = 0.0
-            CaptureDelay = 0.0
-          }
-          $appSettings | ConvertTo-Json -Depth 3 | Set-Content -Encoding UTF8 (Join-Path $cfgDir 'AppSettings.json')
+          # Keep the Double literals explicit. PowerShell ConvertTo-Json serializes 0.0 as 0,
+          # but CapFrameX 1.9.1 beta strictly expects Double for CaptureTime/CaptureDelay.
+          $appSettingsJson = @'
+{
+  "CaptureHotKey": "F11",
+  "CaptureTime": 0.0,
+  "CaptureDelay": 0.0
+}
+'@
+          $appSettingsPath = Join-Path $cfgDir 'AppSettings.json'
+          $appSettingsJson | Set-Content -Encoding UTF8 $appSettingsPath
+          $seeded = Get-Content $appSettingsPath -Raw
+          if ($seeded -notmatch '"CaptureTime"\s*:\s*0\.0') { throw 'CapFrameX CaptureTime must be emitted as JSON Double literal 0.0' }
+          if ($seeded -notmatch '"CaptureDelay"\s*:\s*0\.0') { throw 'CapFrameX CaptureDelay must be emitted as JSON Double literal 0.0' }
 
           $third = 'publish\THIRD_PARTY\CapFrameX'
           New-Item -ItemType Directory -Force -Path $third | Out-Null
@@ -159,7 +167,7 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
           @(
             "G's Cyberpunk 2077 TOTAL Profiler"
-            'Version: 0.2.17'
+            'Version: 0.2.18'
             "Git commit: $env:GITHUB_SHA"
             'Runtime: .NET 8 self-contained win-x64'
             'Packaging: normal self-contained .NET files; NOT PyInstaller; NOT self-extracting'

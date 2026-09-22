@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.17 — native Windows controller
+## v0.2.18 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -173,3 +173,24 @@ The v0.2.15 native correlator HTML timeline graph is retained.
 - No CapFrameX binary patching is applied.
 - TOTAL Profiler still configures only its required portable capture settings: F11, unlimited capture time, zero delay, and the bundled Portable/Captures path.
 - The native HTML combined-timeline graph from v0.2.15 remains.
+
+
+## v0.2.18 CapFrameX Capture tab fix
+
+The bundled CapFrameX beta itself was valid; the Capture tab failure was caused by TOTAL Profiler's generated `AppSettings.json`.
+
+CapFrameX 1.9.1 beta reads `CaptureTime` and `CaptureDelay` as strict CLR `Double` values. PowerShell/.NET JSON serialization can collapse `0.0` to the integer-looking JSON literal `0`. Newtonsoft.Json then materializes that value as `Int32`, and CapFrameX refuses it while constructing `CaptureViewModel`.
+
+v0.2.18 now writes both settings with explicit JSON Double literals:
+
+```json
+"CaptureTime": 0.0,
+"CaptureDelay": 0.0
+```
+
+GitHub Actions verifies those exact literals in the bundled portable config. Runtime INSTALL / VERIFY also preserves explicit decimal literals when updating CapFrameX settings.
+
+This fixes the specific exception:
+`Value of Key CaptureTime has invalid Format: Expected value of type Double but found Int32`.
+
+No administrator/elevation change and no CapFrameX binary patch is used.
