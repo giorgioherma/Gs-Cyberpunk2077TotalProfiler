@@ -8,4 +8,4 @@ The build-time patcher changes only that registration path: after CapFrameX obta
 
 No PresentMon, capture-engine, F11, portable-mode, sensor, or result-format logic is modified.
 
-Every package includes \`Tools/CapFrameX/TOTALProfiler-CapFrameX-Patch.txt\` containing the original and patched CapFrameX.exe SHA-256 values.
+Every package includes \`Tools/CapFrameX/TOTALProfiler-CapFrameX-Patch.txt\` containing the original and patched CapFrameX.dll SHA-256 values.

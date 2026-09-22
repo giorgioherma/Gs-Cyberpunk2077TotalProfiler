@@ -130,7 +130,7 @@ jobs:
         shell: pwsh
         run: |
           dotnet restore tools\CapFrameXPatch\CapFrameXPatch.csproj
-          dotnet run --project tools\CapFrameXPatch\CapFrameXPatch.csproj -c Release --no-restore -- publish\Tools\CapFrameX\CapFrameX.exe
+          dotnet run --project tools\CapFrameXPatch\CapFrameXPatch.csproj -c Release --no-restore -- publish\Tools\CapFrameX\CapFrameX.dll
           if (!(Test-Path 'publish\Tools\CapFrameX\TOTALProfiler-CapFrameX-Patch.txt')) { throw 'CapFrameX patch report missing' }
           Add-Content -Encoding UTF8 'publish\THIRD_PARTY\CapFrameX\SOURCE.txt' 'TOTAL Profiler hotfix: CapFrameXViewRegion.RegisterDeferred is forced through its synchronous fallback path to eliminate the intermittent deferred-tab navigation race.'
 

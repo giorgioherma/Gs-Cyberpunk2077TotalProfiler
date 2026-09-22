@@ -4,14 +4,14 @@ using Mono.Cecil.Cil;
 
 if (args.Length != 1)
 {
-    Console.Error.WriteLine("Usage: CapFrameXPatch <CapFrameX.exe>");
+    Console.Error.WriteLine("Usage: CapFrameXPatch <CapFrameX.dll>");
     return 2;
 }
 
 var path = Path.GetFullPath(args[0]);
 if (!File.Exists(path))
 {
-    Console.Error.WriteLine("CapFrameX.exe not found: " + path);
+    Console.Error.WriteLine("CapFrameX managed assembly not found: " + path);
     return 3;
 }
 
@@ -87,8 +87,8 @@ File.WriteAllText(reportPath,
     "G's Cyberpunk 2077 TOTAL Profiler - CapFrameX 1.9.0 hotfix" + Environment.NewLine +
     "Patch: force CapFrameXViewRegion.RegisterDeferred through its synchronous registration path" + Environment.NewLine +
     "Reason: eliminate intermittent tab-navigation race caused by deferred ApplicationIdle view registration" + Environment.NewLine +
-    "Original CapFrameX.exe SHA256: " + originalHash + Environment.NewLine +
-    "Patched  CapFrameX.exe SHA256: " + patchedHash + Environment.NewLine);
+    "Original CapFrameX.dll SHA256: " + originalHash + Environment.NewLine +
+    "Patched  CapFrameX.dll SHA256: " + patchedHash + Environment.NewLine);
 
 Console.WriteLine("CapFrameX deferred-tab hotfix applied.");
 Console.WriteLine("Original SHA256: " + originalHash);

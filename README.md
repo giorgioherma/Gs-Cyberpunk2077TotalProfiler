@@ -144,7 +144,7 @@ TOTAL Profiler now seeds/updates only `CaptureHotKey=F11`, `CaptureTime=0`, and 
 ## v0.2.15 CapFrameX tab reliability + HTML timeline
 
 - The bundled copy still starts from the hash-verified official **CapFrameX 1.9.0 portable** archive.
-- TOTAL Profiler applies a narrow build-time hotfix to CapFrameX's deferred tab registration. It forces the existing synchronous registration fallback so CAPTURE/ANALYSIS/etc. exist before normal interaction.
+- TOTAL Profiler applies a narrow build-time hotfix to CapFrameX's managed `CapFrameX.dll` deferred tab registration. It forces the existing synchronous registration fallback so CAPTURE/ANALYSIS/etc. exist before normal interaction.
 - PresentMon capture logic, F11, unlimited capture, portable mode and capture JSON format are unchanged.
 - The native correlator HTML again includes the **Combined timeline** graph. The graph disappeared when the Python correlator was replaced by the native C# correlator: the initial C# \`BuildHtml\` implementation ported the summary/tables but not the old canvas chart.
 - The restored self-contained graph plots CapFrameX max frametime, GRSP observed REDscript exclusive work and CET observed exclusive work.
