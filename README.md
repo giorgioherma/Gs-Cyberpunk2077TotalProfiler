@@ -211,3 +211,4 @@ No administrator/elevation change and no CapFrameX binary patch is used.
 - New installs snapshot the complete GRSP data directory and any pre-existing CETProfilerControls directory so restore can return them exactly.
 - CET binding restore now also remembers whether `bindings.json` existed before installation.
 - Restore discards uncollected GRSP/CET/current CapFrameX capture output instead of silently preserving live profiler residue. Already-collected Results remain.
+- GitHub Actions validates both the native C# build and CET manager PowerShell syntax before packaging the Windows artifact.
