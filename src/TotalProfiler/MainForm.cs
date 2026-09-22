@@ -17,7 +17,6 @@ internal sealed class MainForm : Form
     private readonly TextBox captureNameBox = new();
 
     private readonly CheckBox coreOnly = new();
-    private readonly CheckBox capProcessConfirmed = new();
 
     private readonly Label stepLabel = new();
     private readonly Label setupGameStatus = new();
@@ -31,6 +30,8 @@ internal sealed class MainForm : Form
     private readonly Label installStatus = new();
     private readonly Label captureReadiness = new();
     private readonly Label lastCaptureStatus = new();
+    private readonly Label resultsLocationStatus = new();
+    private readonly LinkLabel checkResultsLink = new();
 
     private readonly TextBox logBox = new();
 
@@ -39,12 +40,13 @@ internal sealed class MainForm : Form
     private readonly Button installNext = new();
     private readonly Button collectButton = new();
     private readonly Button compareButton = new();
+    private readonly Button restoreButton = new();
 
     private readonly Panel setupPage = new();
     private readonly Panel installPage = new();
     private readonly Panel capturePage = new();
+    private readonly Panel resultsPage = new();
     private readonly GroupBox advancedPaths = new();
-    private readonly GroupBox advancedRecovery = new();
     private readonly GroupBox technicalLog = new();
 
     private bool busy;
@@ -52,6 +54,7 @@ internal sealed class MainForm : Form
     private bool installVerified;
     private bool cetBindingVerified;
     private bool capSettingsVerified;
+    private bool syncingScenarioNames;
     private int currentPage;
 
     public MainForm()
@@ -65,6 +68,8 @@ internal sealed class MainForm : Form
         Font = new Font("Segoe UI", 9F);
 
         BuildUi();
+        scenarioBox.TextChanged += (_, _) => SyncScenarioName(scenarioBox, captureNameBox);
+        captureNameBox.TextChanged += (_, _) => SyncScenarioName(captureNameBox, scenarioBox);
         LoadConfigIntoUi();
 
         Shown += async (_, _) =>
@@ -119,6 +124,8 @@ internal sealed class MainForm : Form
         setupPage.Dock = DockStyle.Fill;
         installPage.Dock = DockStyle.Fill;
         capturePage.Dock = DockStyle.Fill;
+        resultsPage.Dock = DockStyle.Fill;
+        pageHost.Controls.Add(resultsPage);
         pageHost.Controls.Add(capturePage);
         pageHost.Controls.Add(installPage);
         pageHost.Controls.Add(setupPage);
@@ -127,6 +134,7 @@ internal sealed class MainForm : Form
         BuildSetupPage();
         BuildInstallPage();
         BuildCapturePage();
+        BuildResultsPage();
         ShowPage(0);
     }
 
@@ -253,7 +261,7 @@ internal sealed class MainForm : Form
         og.Controls.Add(coreOnly, 0, 0);
         og.SetColumnSpan(coreOnly, 2);
 
-        og.Controls.Add(new Label { Text = "GRSP scenario tag:", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
+        og.Controls.Add(new Label { Text = "Scenario / capture name:", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
         scenarioBox.Width = 180;
         scenarioBox.Anchor = AnchorStyles.Left;
         og.Controls.Add(scenarioBox, 1, 1);
@@ -288,34 +296,7 @@ internal sealed class MainForm : Form
         installActions.Controls.Add(refresh);
         body.Controls.Add(installActions);
 
-        var recoveryToggle = new Button { Text = "Advanced / recovery ▼", AutoSize = true, Height = 30, Margin = new Padding(0, 10, 0, 3) };
-        recoveryToggle.Click += (_, _) =>
-        {
-            advancedRecovery.Visible = !advancedRecovery.Visible;
-            recoveryToggle.Text = advancedRecovery.Visible ? "Advanced / recovery ▲" : "Advanced / recovery ▼";
-        };
-        body.Controls.Add(recoveryToggle);
-
-        advancedRecovery.Text = "Advanced / recovery";
-        advancedRecovery.Dock = DockStyle.Fill;
-        advancedRecovery.AutoSize = true;
-        advancedRecovery.Padding = new Padding(10);
-        advancedRecovery.Visible = false;
-        var recoveryFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
-        var restoreAll = new Button { Text = "RESTORE ORIGINAL STATE", Width = 195, Height = 32 };
-        restoreAll.Click += async (_, _) => await RestoreAllAsync();
-        recoveryFlow.Controls.Add(restoreAll);
-        recoveryFlow.Controls.Add(new Label
-        {
-            Text = "Restores TOTAL Profiler-managed GRSP/CET/0-Engine/CapFrameX configuration. Captures/results stay.",
-            AutoSize = true,
-            Margin = new Padding(10, 8, 0, 0),
-            ForeColor = SystemColors.GrayText
-        });
-        advancedRecovery.Controls.Add(recoveryFlow);
-        body.Controls.Add(advancedRecovery);
-
-        var logToggle = new Button { Text = "Technical log ▼", AutoSize = true, Height = 30, Margin = new Padding(0, 5, 0, 3) };
+        var logToggle = new Button { Text = "Technical log ▼"        var logToggle = new Button { Text = "Technical log ▼", AutoSize = true, Height = 30, Margin = new Padding(0, 5, 0, 3) };
         logToggle.Click += (_, _) =>
         {
             technicalLog.Visible = !technicalLog.Visible;
@@ -356,15 +337,15 @@ internal sealed class MainForm : Form
     {
         var body = PageBody(capturePage);
 
-        body.Controls.Add(PageHeading("STEP 3 — CAPTURE & RESULTS", "Name the run, perform one synchronized F11 capture, then collect and compare."));
+        body.Controls.Add(PageHeading("STEP 3 — MEASUREMENT", "Run one synchronized F11 measurement, then continue to Results."));
 
-        var nameGroup = Group("Capture");
+        var nameGroup = Group("Measurement");
         var ng = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 2 };
-        ng.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+        ng.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
         ng.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        ng.Controls.Add(new Label { Text = "Capture name:", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
+        ng.Controls.Add(new Label { Text = "Scenario / capture name:", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
         captureNameBox.Dock = DockStyle.Fill;
-        captureNameBox.PlaceholderText = "e.g. JIG_WORLD_TEST_01";
+        captureNameBox.PlaceholderText = "e.g. Drive-Battle-Chase";
         ng.Controls.Add(captureNameBox, 1, 0);
         captureReadiness.AutoSize = true;
         captureReadiness.MaximumSize = new Size(760, 0);
@@ -374,29 +355,38 @@ internal sealed class MainForm : Form
         nameGroup.Controls.Add(ng);
         body.Controls.Add(nameGroup);
 
-        var workflow = Group("Run the capture");
-        var wg = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 5 };
+        var workflow = Group("Measurement");
+        var wg = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 6 };
 
-        var instructions = new Label
+        wg.Controls.Add(new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(770, 0),
+            Font = new Font("Segoe UI Semibold", 13F),
+            Text = "Make sure all 3 profilers have their start/stop key bound to F11.",
+            Margin = new Padding(0, 2, 0, 8)
+        });
+
+        wg.Controls.Add(new Label
+        {
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 11F),
+            Text = "RUN THE GAME AND PROFILERS!",
+            Margin = new Padding(0, 2, 0, 8)
+        });
+
+        wg.Controls.Add(new Label
         {
             AutoSize = true,
             MaximumSize = new Size(770, 0),
             Text =
-                "1. Launch CapFrameX and Cyberpunk 2077.\r\n" +
-                "2. In CapFrameX, confirm the Capture hotkey is F11 and Running processes contains Cyberpunk2077.exe only.\r\n" +
-                "3. In game, press F11 once — GRSP + CET + CapFrameX START together.\r\n" +
-                "4. Play the test scenario.\r\n" +
-                "5. Press F11 again — all three STOP and CET exports its CSV automatically.\r\n" +
-                "6. Close Cyberpunk 2077, return here, then click COLLECT RESULTS."
-        };
-        wg.Controls.Add(instructions);
+                "1. Load a save.\r\n" +
+                "2. Press F11 to start capture (temporarily unbind any other bindings from F11).\r\n" +
+                "3. Press F11 when finished.\r\n" +
+                "4. Return to this page."
+        });
 
-        capProcessConfirmed.Text = "I checked CapFrameX: Cyberpunk2077.exe is the only captured game/process.";
-        capProcessConfirmed.AutoSize = true;
-        capProcessConfirmed.Margin = new Padding(0, 10, 0, 4);
-        wg.Controls.Add(capProcessConfirmed);
-
-        var launchFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = new Padding(0, 8, 0, 5) };
+        var launchFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = new Padding(0, 10, 0, 5) };
         var launchCap = new Button { Text = "LAUNCH CAPFRAMEX", Width = 165, Height = 36 };
         launchCap.Click += (_, _) => LaunchCapX();
         var launchGame = new Button { Text = "LAUNCH CYBERPUNK", Width = 170, Height = 36 };
@@ -408,20 +398,44 @@ internal sealed class MainForm : Form
         launchFlow.Controls.Add(refresh);
         wg.Controls.Add(launchFlow);
 
-        var f11 = new Label
+        var resetFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = new Padding(0, 10, 0, 0) };
+        resetFlow.Controls.Add(new Label
         {
+            Text = "If all 3 profilers did not run, RESET CAPTURE STATE here and repeat the measurement.",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 11F),
-            Text = "F11 = START   →   play   →   F11 = STOP + CET EXPORT",
-            Margin = new Padding(0, 8, 0, 4)
-        };
-        wg.Controls.Add(f11);
+            MaximumSize = new Size(520, 0),
+            Margin = new Padding(0, 8, 10, 0)
+        });
+        var resetCapture = new Button { Text = "RESET CAPTURE STATE", Width = 170, Height = 32 };
+        resetCapture.Click += async (_, _) => await ResetCaptureStateAsync();
+        resetFlow.Controls.Add(resetCapture);
+        wg.Controls.Add(resetFlow);
 
         workflow.Controls.Add(wg);
         body.Controls.Add(workflow);
 
+        var nav = NavPanel();
+        var back = new Button { Text = "← INSTALL", Width = 110, Height = 34 };
+        back.Click += (_, _) => ShowPage(1);
+        var results = new Button { Text = "RESULTS →", Width = 120, Height = 34 };
+        results.Click += async (_, _) =>
+        {
+            await RefreshStatusAsync();
+            ShowPage(3);
+        };
+        nav.Controls.Add(back);
+        nav.Controls.Add(results);
+        body.Controls.Add(nav);
+    }
+
+    private void BuildResultsPage()
+    {
+        var body = PageBody(resultsPage);
+
+        body.Controls.Add(PageHeading("STEP 4 — RESULTS", "Collect the three profiler outputs, compare them, or open the latest result."));
+
         var results = Group("Results");
-        var rg = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 3 };
+        var rg = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 5 };
 
         var resultActions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
         collectButton.Text = "COLLECT RESULTS";
@@ -434,7 +448,7 @@ internal sealed class MainForm : Form
         compareButton.Height = 38;
         compareButton.Click += async (_, _) => await CompareAsync();
 
-        var openLatest = new Button { Text = "Open latest", Width = 115, Height = 38 };
+        var openLatest = new Button { Text = "OPEN LAST", Width = 115, Height = 38 };
         openLatest.Click += (_, _) => OpenLatest();
 
         resultActions.Controls.Add(collectButton);
@@ -444,34 +458,58 @@ internal sealed class MainForm : Form
 
         lastCaptureStatus.AutoSize = true;
         lastCaptureStatus.MaximumSize = new Size(760, 0);
-        lastCaptureStatus.Margin = new Padding(0, 8, 0, 2);
+        lastCaptureStatus.Margin = new Padding(0, 10, 0, 2);
         rg.Controls.Add(lastCaptureStatus);
 
-        var failed = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = new Padding(0, 10, 0, 0) };
-        failed.Controls.Add(new Label { Text = "Something went wrong with this run?", AutoSize = true, Margin = new Padding(0, 8, 8, 0) });
-        var resetCapture = new Button { Text = "RESET CAPTURE STATE", Width = 170, Height = 32 };
-        resetCapture.Click += async (_, _) => await ResetCaptureStateAsync();
-        failed.Controls.Add(resetCapture);
-        failed.Controls.Add(new Label
+        resultsLocationStatus.AutoSize = true;
+        resultsLocationStatus.MaximumSize = new Size(760, 0);
+        resultsLocationStatus.ForeColor = SystemColors.GrayText;
+        resultsLocationStatus.Margin = new Padding(0, 4, 0, 4);
+        rg.Controls.Add(resultsLocationStatus);
+
+        checkResultsLink.Text = "CHECK RESULTS HERE!";
+        checkResultsLink.AutoSize = true;
+        checkResultsLink.Font = new Font("Segoe UI Semibold", 10F);
+        checkResultsLink.Margin = new Padding(0, 8, 0, 8);
+        checkResultsLink.LinkClicked += (_, _) => OpenLatestReportOrFolder();
+        rg.Controls.Add(checkResultsLink);
+
+        rg.Controls.Add(new Label
         {
-            Text = "Archives partial raw state; already-collected results stay.",
             AutoSize = true,
+            MaximumSize = new Size(760, 0),
             ForeColor = SystemColors.GrayText,
-            Margin = new Padding(8, 8, 0, 0)
+            Text = "COLLECT RESULTS copies the profiler outputs into the TOTAL Profiler Results folder and opens that capture folder so the files are visible immediately."
         });
-        rg.Controls.Add(failed);
 
         results.Controls.Add(rg);
         body.Controls.Add(results);
 
+        var restoreInfo = new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(780, 0),
+            ForeColor = SystemColors.GrayText,
+            Margin = new Padding(0, 14, 0, 4),
+            Text = "RESTORE GAME FILES returns every TOTAL Profiler-managed game file and configuration to its original state. Any uncollected profiler results will be lost. Already-collected Results stay."
+        };
+        body.Controls.Add(restoreInfo);
+
         var nav = NavPanel();
-        var back = new Button { Text = "← INSTALL", Width = 110, Height = 34 };
-        back.Click += (_, _) => ShowPage(1);
+        var back = new Button { Text = "← MEASUREMENT", Width = 145, Height = 34 };
+        back.Click += (_, _) => ShowPage(2);
+
+        restoreButton.Text = "RESTORE GAME FILES";
+        restoreButton.Width = 175;
+        restoreButton.Height = 34;
+        restoreButton.Click += async (_, _) => await RestoreAllAsync();
+
         nav.Controls.Add(back);
+        nav.Controls.Add(restoreButton);
         body.Controls.Add(nav);
     }
 
-    private static Control PageHeading(string title, string description)
+    private static Control PageHeading    private static Control PageHeading(string title, string description)
     {
         var p = new Panel { Dock = DockStyle.Fill, Height = 68, Margin = new Padding(0, 0, 0, 8) };
         var h = new Label { Text = title, Font = new Font("Segoe UI Semibold", 15F), AutoSize = true, Location = new Point(0, 0) };
@@ -526,24 +564,42 @@ internal sealed class MainForm : Form
 
     private void ShowPage(int page)
     {
-        currentPage = Math.Clamp(page, 0, 2);
+        currentPage = Math.Clamp(page, 0, 3);
         setupPage.Visible = currentPage == 0;
         installPage.Visible = currentPage == 1;
         capturePage.Visible = currentPage == 2;
+        resultsPage.Visible = currentPage == 3;
 
         if (setupPage.Visible) setupPage.BringToFront();
         if (installPage.Visible) installPage.BringToFront();
         if (capturePage.Visible) capturePage.BringToFront();
+        if (resultsPage.Visible) resultsPage.BringToFront();
 
         stepLabel.Text = currentPage switch
         {
-            0 => "1  SETUP   ›   2  INSTALL & VERIFY   ›   3  CAPTURE & RESULTS",
-            1 => "1  Setup   ›   2  INSTALL & VERIFY   ›   3  Capture & Results",
-            _ => "1  Setup   ›   2  Install & Verify   ›   3  CAPTURE & RESULTS"
+            0 => "1  SETUP   ›   2  INSTALL & VERIFY   ›   3  MEASUREMENT   ›   4  RESULTS",
+            1 => "1  Setup   ›   2  INSTALL & VERIFY   ›   3  Measurement   ›   4  Results",
+            2 => "1  Setup   ›   2  Install & Verify   ›   3  MEASUREMENT   ›   4  Results",
+            _ => "1  Setup   ›   2  Install & Verify   ›   3  Measurement   ›   4  RESULTS"
         };
     }
 
-    private void LoadConfigIntoUi()
+    private void SyncScenarioName(TextBox source, TextBox target)
+    {
+        if (syncingScenarioNames) return;
+        try
+        {
+            syncingScenarioNames = true;
+            if (!string.Equals(target.Text, source.Text, StringComparison.Ordinal))
+                target.Text = source.Text;
+        }
+        finally
+        {
+            syncingScenarioNames = false;
+        }
+    }
+
+    private void LoadConfigIntoUi()    private void LoadConfigIntoUi()
     {
         if (cfg.UseBundledCapFrameX && File.Exists(ProfilerServices.BundledCapFrameXExe))
         {
@@ -557,8 +613,18 @@ internal sealed class MainForm : Form
         capExeBox.Text = cfg.CapFrameXExe;
         capResultsBox.Text = cfg.CapFrameXResults;
         resultsBox.Text = cfg.ResultsDirectory;
-        scenarioBox.Text = cfg.Scenario;
-        captureNameBox.Text = cfg.CaptureName;
+
+        var sharedScenario = !string.IsNullOrWhiteSpace(cfg.CaptureName) &&
+                             !string.Equals(cfg.CaptureName, "TEST", StringComparison.OrdinalIgnoreCase)
+            ? cfg.CaptureName
+            : cfg.Scenario;
+        if (string.IsNullOrWhiteSpace(sharedScenario)) sharedScenario = "TEST";
+        scenarioBox.Text = sharedScenario;
+        captureNameBox.Text = sharedScenario;
+        cfg.Scenario = sharedScenario;
+        cfg.CaptureName = sharedScenario;
+        cfg.Save();
+
         coreOnly.Checked = cfg.CetCoreOnly;
         UpdateActionState();
     }
@@ -569,8 +635,11 @@ internal sealed class MainForm : Form
         cfg.CapFrameXExe = capExeBox.Text.Trim();
         cfg.CapFrameXResults = capResultsBox.Text.Trim();
         cfg.ResultsDirectory = resultsBox.Text.Trim();
-        cfg.Scenario = string.IsNullOrWhiteSpace(scenarioBox.Text) ? "TEST" : scenarioBox.Text.Trim();
-        cfg.CaptureName = string.IsNullOrWhiteSpace(captureNameBox.Text) ? "TEST" : captureNameBox.Text.Trim();
+        var sharedScenario = string.IsNullOrWhiteSpace(scenarioBox.Text) ? "TEST" : scenarioBox.Text.Trim();
+        if (!string.Equals(captureNameBox.Text, sharedScenario, StringComparison.Ordinal))
+            captureNameBox.Text = sharedScenario;
+        cfg.Scenario = sharedScenario;
+        cfg.CaptureName = sharedScenario;
         cfg.CetCoreOnly = coreOnly.Checked;
         cfg.Save();
     }
@@ -699,6 +768,7 @@ internal sealed class MainForm : Form
         installNext.Enabled = !busy && installVerified;
         collectButton.Enabled = !busy && installVerified;
         compareButton.Enabled = !busy && !string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture);
+        restoreButton.Enabled = !busy && gameValid;
     }
 
     private async Task RunBusy(Func<Task> action)
@@ -804,11 +874,12 @@ internal sealed class MainForm : Form
 
             captureReadiness.Text =
                 $"Automatic checks: {(installVerified ? "READY ✓" : "NOT READY")}   ·   CET F11 {(cetBindingVerified ? "✓" : "✗")}   ·   CapFrameX F11/unlimited {(capSettingsVerified ? "✓" : "✗")}\r\n" +
-                "Manual check before every run: CapFrameX Running processes should contain Cyberpunk2077.exe only.";
+                "First-run manual check: make sure CapFrameX (Capture tab), REDscript profiler (currently hard-coded F11), and CET profiler (CET binding) all use the same F11 start/stop key. If CapFrameX is not recording, make sure Cyberpunk2077.exe is the only active capture process.";
             captureReadiness.ForeColor = installVerified ? Color.DarkGreen : Color.DarkRed;
 
+            resultsLocationStatus.Text = $"Results folder: {cfg.ResultsDirectory}";
             if (!string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture))
-                lastCaptureStatus.Text = $"Latest collected capture: {Path.GetFileName(cfg.LastCapture)}";
+                lastCaptureStatus.Text = $"Latest collected capture: {Path.GetFileName(cfg.LastCapture)}\r\n{cfg.LastCapture}";
             else
                 lastCaptureStatus.Text = "No collected capture selected yet.";
 
@@ -904,7 +975,7 @@ internal sealed class MainForm : Form
         if (!installVerified)
             throw new InvalidOperationException("Installation completed, but one or more verification checks are still failing. Expand Technical log for details.");
 
-        Log("Installation VERIFIED. Continue to Capture & Results.");
+        Log("Installation VERIFIED. Continue to Measurement.");
     });
 
     private async Task CollectAsync() => await RunBusy(async () =>
@@ -924,9 +995,10 @@ internal sealed class MainForm : Form
             (result.DurationDeltaMs is null ? "" : $" · duration Δ {result.DurationDeltaMs:F3} ms");
 
         await RefreshStatusAsync();
+        ProfilerServices.OpenPath(result.CaptureDirectory);
 
         MessageBox.Show(this,
-            $"Collected successfully.\r\n\r\n{Path.GetFileName(result.CaptureDirectory)}\r\n\r\nSync precheck: {result.SyncPrecheck}\r\n\r\nNext: click COMPARE RESULTS.",
+            $"Collected successfully.\r\n\r\n{Path.GetFileName(result.CaptureDirectory)}\r\n\r\nSync precheck: {result.SyncPrecheck}\r\n\r\nThe capture folder has been opened. Next: click COMPARE RESULTS.",
             ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
     });
 
@@ -1039,7 +1111,6 @@ internal sealed class MainForm : Form
 
             cfg.CaptureResetUtc = resetStarted;
             cfg.Save();
-            capProcessConfirmed.Checked = false;
 
             foreach (var note in notes) Log(note);
 
@@ -1052,10 +1123,11 @@ internal sealed class MainForm : Form
     private async Task RestoreAllAsync()
     {
         if (MessageBox.Show(this,
-            "Restore everything TOTAL Profiler changed back to its original state?\r\n\r\n" +
-            "This restores CET / managed 0-Engine state, GRSP DLL state, CET binding state and any CapFrameX settings backup.\r\n\r\n" +
-            "Capture/result folders are NOT deleted. Cyberpunk 2077 must be closed.",
-            ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            "Restore every TOTAL Profiler change in the Cyberpunk 2077 game folder?\r\n\r\n" +
+            "All TOTAL Profiler-managed game files and configuration will be returned to their original state. CapFrameX settings changed by TOTAL Profiler will also be restored.\r\n\r\n" +
+            "Any uncollected GRSP, CET, or current CapFrameX capture data will be discarded. Already-collected Results stay.\r\n\r\n" +
+            "Cyberpunk 2077 must be closed.",
+            ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
 
         await RunBusy(async () =>
@@ -1071,13 +1143,15 @@ internal sealed class MainForm : Form
                 using var status = await ProfilerServices.CallCetAsync("Status", cfg.GameDirectory);
                 if (J(status.RootElement, "managed") == "True")
                 {
-                    var outDir = Path.Combine(cfg.ResultsDirectory, "CET_Restore_Archive");
-                    Directory.CreateDirectory(outDir);
-                    using var r = await ProfilerServices.CallCetAsync("Restore", cfg.GameDirectory, outDir);
-                    var archived = J(r.RootElement, "archived");
-                    notes.Add("CET / 0-Engine: restored" + (string.IsNullOrWhiteSpace(archived) ? "." : $" · final CET results archived to {archived}"));
+                    using var r = await ProfilerServices.CallCetAsync("Restore", cfg.GameDirectory, discardLiveOnRestore: true);
+                    var discarded = J(r.RootElement, "discardedLiveResultCount");
+                    notes.Add("CET / 0-Engine: original files restored; live uncollected CET CSVs discarded" +
+                              (string.IsNullOrWhiteSpace(discarded) ? "." : $" ({discarded})."));
                 }
-                else notes.Add("CET / 0-Engine: no TOTAL Profiler managed state was present.");
+                else
+                {
+                    notes.Add("CET / 0-Engine: no TOTAL Profiler managed state was present.");
+                }
             }
             catch (Exception ex)
             {
@@ -1107,23 +1181,77 @@ internal sealed class MainForm : Form
 
             try
             {
-                notes.Add("CapFrameX: " + await Task.Run(() => ProfilerServices.RestoreCapFrameXConfigBestEffort(cfg.CapFrameXExe)));
+                var cap = ProfilerServices.LatestValidCapXCapture(cfg.CapFrameXResults, cfg.CaptureResetUtc?.UtcDateTime);
+                if (cap is not null && File.Exists(cap))
+                {
+                    File.Delete(cap);
+                    notes.Add($"CapFrameX: discarded uncollected capture {Path.GetFileName(cap)}.");
+                }
+                else
+                {
+                    notes.Add("CapFrameX: no uncollected capture to discard.");
+                }
             }
             catch (Exception ex)
             {
                 failed = true;
-                notes.Add("CapFrameX: RESTORE FAILED · " + ex.Message);
+                notes.Add("CapFrameX capture cleanup: FAILED · " + ex.Message);
             }
+
+            try
+            {
+                notes.Add("CapFrameX settings: " + await Task.Run(() => ProfilerServices.RestoreCapFrameXConfigBestEffort(cfg.CapFrameXExe)));
+            }
+            catch (Exception ex)
+            {
+                failed = true;
+                notes.Add("CapFrameX settings: RESTORE FAILED · " + ex.Message);
+            }
+
+            cfg.CaptureResetUtc = DateTimeOffset.UtcNow;
+            cfg.Save();
 
             foreach (var note in notes) Log(note);
             await RefreshStatusAsync();
 
-            MessageBox.Show(this, string.Join("\r\n\r\n", notes), ProfilerServices.AppName,
-                MessageBoxButtons.OK, failed ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            MessageBox.Show(this,
+                string.Join("\r\n\r\n", notes) +
+                (failed ? "\r\n\r\nOne or more restore steps failed. The app kept the remaining restore state so the operation can be retried safely." :
+                          "\r\n\r\nGame files are back to the managed pre-profiler state."),
+                ProfilerServices.AppName,
+                MessageBoxButtons.OK,
+                failed ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
         });
     }
 
-    private void OpenLatest()
+    private void OpenLatestReportOrFolder()
+    {
+        SaveConfig();
+
+        if (!string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture))
+        {
+            var combined = Path.Combine(cfg.LastCapture, "Combined", "GRSP_Combined_Report.html");
+            if (File.Exists(combined))
+            {
+                ProfilerServices.OpenPath(combined);
+                return;
+            }
+
+            var grsp = Path.Combine(cfg.LastCapture, "Raw", "GRSP", "GRSP_Report.html");
+            if (File.Exists(grsp))
+            {
+                ProfilerServices.OpenPath(grsp);
+                return;
+            }
+
+            ProfilerServices.OpenPath(cfg.LastCapture);
+            return;
+        }
+
+        ProfilerServices.OpenPath(cfg.ResultsDirectory);
+    }
+
+    private void OpenLatest()    private void OpenLatest()
     {
         SaveConfig();
 
