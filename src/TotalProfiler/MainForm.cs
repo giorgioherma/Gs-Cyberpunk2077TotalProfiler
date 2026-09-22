@@ -106,8 +106,10 @@ internal sealed class MainForm : Form
         compareButton.Text = "COMPARE RESULTS"; compareButton.Width = 155; compareButton.Height = 34; compareButton.Click += async (_, _) => await CompareAsync();
         var openLatest = new Button { Text = "Open latest", Width = 115, Height = 34 }; openLatest.Click += (_, _) => OpenLatest();
         var resetResults = new Button { Text = "RESET RESULT PATHS", Width = 155, Height = 34 }; resetResults.Click += (_, _) => ResetResultPaths();
+        var resetCapture = new Button { Text = "RESET CAPTURE STATE", Width = 165, Height = 34 }; resetCapture.Click += async (_, _) => await ResetCaptureStateAsync();
+        var resetCaptureNote = new Label { Text = "Archives partial raw GRSP/CET/CapFrameX state; collected Results stay.", AutoSize = true, Margin = new Padding(8, 10, 12, 0), ForeColor = SystemColors.GrayText };
         var restoreAll = new Button { Text = "RESTORE ORIGINAL STATE", Width = 190, Height = 34 }; restoreAll.Click += async (_, _) => await RestoreAllAsync();
-        af.Controls.AddRange([installButton, collectButton, compareButton, openLatest, resetResults, restoreAll]); actions.Controls.Add(af); outer.Controls.Add(actions);
+        af.Controls.AddRange([installButton, collectButton, compareButton, openLatest, resetResults, resetCapture, resetCaptureNote, restoreAll]); actions.Controls.Add(af); outer.Controls.Add(actions);
 
         var workflow = Group("Capture workflow");
         var wf = new Label { AutoSize = true, MaximumSize = new Size(1060, 0), Text = $"1) INSTALL PROFILERS and confirm Install check = VERIFIED ✓.   2) Launch CapFrameX and Cyberpunk 2077.   3) F11 starts GRSP + CET + CapFrameX.   4) F11 stops all three.   5) F12 exports CET CSVs.   6) Close the game.   7) COLLECT RESULTS.   8) COMPARE RESULTS.\r\n\r\nCET note: after first profiler install, bind 'Profiler: START / PAUSE / RESUME' to F11 and 'Profiler: CREATE CSV' to F12 in CET > Bindings.\r\nCapFrameX note: while profiling, Cyberpunk 2077 should be the only app in CapFrameX 'Running processes'. If anything else is listed, move it to the CapFrameX ignore list before capture.\r\nBundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion}; Browse may link any compatible version." };
@@ -193,9 +195,79 @@ internal sealed class MainForm : Form
 
         MessageBox.Show(this,
             string.IsNullOrWhiteSpace(capTarget)
-                ? $"TOTAL Profiler results reset to:\r\n{resultsBox.Text}\r\n\r\nCapFrameX results could not be auto-detected; use Browse for that path."
-                : $"Result paths reset.\r\n\r\nCapFrameX:\r\n{capResultsBox.Text}\r\n\r\nTOTAL Profiler:\r\n{resultsBox.Text}",
+                ? $"TOTAL Profiler results path reset to:\r\n{resultsBox.Text}\r\n\r\nCapFrameX results could not be auto-detected; use Browse for that path.\r\n\r\nNo capture/result files were deleted."
+                : $"Result paths reset.\r\n\r\nCapFrameX:\r\n{capResultsBox.Text}\r\n\r\nTOTAL Profiler:\r\n{resultsBox.Text}\r\n\r\nNo capture/result files were deleted.",
             ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private async Task ResetCaptureStateAsync()
+    {
+        if (MessageBox.Show(this,
+            "Reset the CURRENT capture state?\r\n\r\n" +
+            "Use this after an incomplete/failed capture, for example when GRSP + CapFrameX recorded but CET did not.\r\n\r\n" +
+            "The current/latest raw GRSP capture, CET live CSVs, and latest CapFrameX capture are MOVED to Results\\Discarded, not permanently deleted.\r\n" +
+            "Already-collected TOTAL Profiler Results are untouched and all profilers remain installed.\r\n\r\nCyberpunk 2077 must be closed.",
+            ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+        await RunBusy(async () =>
+        {
+            if (ProfilerServices.IsGameRunning()) throw new InvalidOperationException("Cyberpunk 2077 is running. Close it before resetting capture state.");
+
+            var resetStarted = DateTimeOffset.UtcNow;
+            var discardRoot = Path.Combine(cfg.ResultsDirectory, "Discarded", $"Reset_{DateTime.Now:yyyyMMdd-HHmmss}");
+            Directory.CreateDirectory(discardRoot);
+            var notes = new List<string>();
+
+            var grsp = ProfilerServices.LatestGrspCapture(cfg.GameDirectory, cfg.CaptureResetUtc?.UtcDateTime);
+            if (grsp is not null && Directory.Exists(grsp))
+            {
+                var dstRoot = Path.Combine(discardRoot, "GRSP");
+                Directory.CreateDirectory(dstRoot);
+                var dst = Path.Combine(dstRoot, Path.GetFileName(grsp));
+                Directory.Move(grsp, dst);
+                var latestTxt = Path.Combine(cfg.GameDirectory, "red4ext", "plugins", "redscript_profiler_alpha", "RESULTS", "LATEST.txt");
+                if (File.Exists(latestTxt)) File.Delete(latestTxt);
+                notes.Add($"GRSP: archived {Path.GetFileName(grsp)}.");
+            }
+            else notes.Add("GRSP: no current capture to reset.");
+
+            try
+            {
+                var cetRoot = Path.Combine(discardRoot, "CET");
+                Directory.CreateDirectory(cetRoot);
+                using var r = await ProfilerServices.CallCetAsync("ResetLive", cfg.GameDirectory, cetRoot);
+                var archived = J(r.RootElement, "archived");
+                notes.Add(string.IsNullOrWhiteSpace(archived) ? "CET: no live CSV results to reset." : $"CET: live CSVs archived to {archived}.");
+            }
+            catch (Exception ex)
+            {
+                notes.Add("CET: reset failed · " + ex.Message.Split('\n').Last());
+            }
+
+            var cap = ProfilerServices.LatestValidCapXCapture(cfg.CapFrameXResults, cfg.CaptureResetUtc?.UtcDateTime);
+            if (cap is not null && File.Exists(cap))
+            {
+                var dstRoot = Path.Combine(discardRoot, "CapFrameX");
+                Directory.CreateDirectory(dstRoot);
+                var dst = Path.Combine(dstRoot, Path.GetFileName(cap));
+                if (File.Exists(dst)) dst = Path.Combine(dstRoot, $"{Path.GetFileNameWithoutExtension(cap)}_{DateTime.Now:HHmmss}{Path.GetExtension(cap)}");
+                File.Move(cap, dst);
+                notes.Add($"CapFrameX: archived {Path.GetFileName(cap)}.");
+            }
+            else notes.Add("CapFrameX: no current valid capture to reset.");
+
+            cfg.CaptureResetUtc = resetStarted;
+            cfg.Save();
+
+            foreach (var note in notes) Log(note);
+            Log($"Capture-state reset boundary: {resetStarted:O}");
+
+            MessageBox.Show(this,
+                string.Join("\r\n", notes) +
+                "\r\n\r\nCapture state is clean for the next F11 run." +
+                "\r\nNothing was permanently deleted; discarded raw data is under Results\\Discarded.",
+                ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        });
     }
 
     private void BrowseCapResults() { using var d = new FolderBrowserDialog { Description = "Select CapFrameX capture/results folder", SelectedPath = capResultsBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { capResultsBox.Text = d.SelectedPath; SaveConfig(); _ = RefreshStatusAsync(); } }
@@ -334,7 +406,10 @@ internal sealed class MainForm : Form
     private async Task CollectAsync() => await RunBusy(async () =>
     {
         var result = await CaptureCollector.CollectAsync(cfg, Log);
-        cfg.LastCapture = result.CaptureDirectory; cfg.Save(); ProfilerServices.OpenPath(result.CaptureDirectory);
+        cfg.LastCapture = result.CaptureDirectory;
+        cfg.CaptureResetUtc = DateTimeOffset.UtcNow;
+        cfg.Save();
+        ProfilerServices.OpenPath(result.CaptureDirectory);
         var details = $"Collected successfully.\r\n\r\n{result.CaptureDirectory}\r\n\r\nPrecheck: {result.SyncPrecheck}";
         if (result.StartDeltaMs is not null) details += $"\r\nGRSP↔CET start delta: {result.StartDeltaMs:F3} ms";
         if (result.DurationDeltaMs is not null) details += $"\r\nDuration delta: {result.DurationDeltaMs:F3} ms";

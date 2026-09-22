@@ -9,7 +9,7 @@ namespace GsCyberpunkTotalProfiler;
 internal static class ProfilerServices
 {
     public const string AppName = "G's Cyberpunk 2077 TOTAL Profiler";
-    public const string Version = "0.2.9";
+    public const string Version = "0.2.10";
     public const string GrspVersion = "0.5.0";
     public const string CetVersion = "3.0.0-alpha6b";
     public const string CorrelatorVersion = "0.2.0-native";
@@ -272,7 +272,7 @@ internal static class ProfilerServices
 
     private static string Quote(string s) => "\"" + s.Replace("\"", "\\\"") + "\"";
 
-    public static string? LatestGrspCapture(string gameRoot)
+    public static string? LatestGrspCapture(string gameRoot, DateTime? notBeforeUtc = null)
     {
         var results = Path.Combine(gameRoot, "red4ext", "plugins", "redscript_profiler_alpha", "RESULTS");
         if (!Directory.Exists(results)) return null;
@@ -285,13 +285,16 @@ internal static class ProfilerServices
                 if (!string.IsNullOrWhiteSpace(raw))
                 {
                     var p = Path.IsPathRooted(raw) ? raw : Path.Combine(results, raw);
-                    if (Directory.Exists(p) && File.Exists(Path.Combine(p, "GRSP_Summary.csv"))) return Path.GetFullPath(p);
+                    if (Directory.Exists(p) && File.Exists(Path.Combine(p, "GRSP_Summary.csv")) &&
+                        (notBeforeUtc is null || Directory.GetLastWriteTimeUtc(p) >= notBeforeUtc.Value))
+                        return Path.GetFullPath(p);
                 }
             }
             catch { }
         }
         return Directory.EnumerateDirectories(results, "Capture_*", SearchOption.TopDirectoryOnly)
             .Where(p => File.Exists(Path.Combine(p, "GRSP_Summary.csv")))
+            .Where(p => notBeforeUtc is null || Directory.GetLastWriteTimeUtc(p) >= notBeforeUtc.Value)
             .OrderByDescending(Directory.GetLastWriteTimeUtc).FirstOrDefault();
     }
 
@@ -330,11 +333,13 @@ internal static class ProfilerServices
         catch { return null; }
     }
 
-    public static (string? Path, double? Duration) ChooseCapXCapture(string root, double targetDurationMs)
+    public static (string? Path, double? Duration) ChooseCapXCapture(string root, double targetDurationMs, DateTime? notBeforeUtc = null)
     {
         if (!Directory.Exists(root)) return (null, null);
         string? bestPath = null; double? bestDur = null; double bestScore = double.MaxValue;
-        foreach (var path in Directory.EnumerateFiles(root, "*.json", SearchOption.AllDirectories).OrderByDescending(File.GetLastWriteTimeUtc).Take(100))
+        foreach (var path in Directory.EnumerateFiles(root, "*.json", SearchOption.AllDirectories)
+                     .Where(p => notBeforeUtc is null || File.GetLastWriteTimeUtc(p) >= notBeforeUtc.Value)
+                     .OrderByDescending(File.GetLastWriteTimeUtc).Take(100))
         {
             var d = CapXDurationMs(path);
             if (d is null) continue;
@@ -342,6 +347,15 @@ internal static class ProfilerServices
             if (score < bestScore) { bestScore = score; bestPath = path; bestDur = d; }
         }
         return (bestPath, bestDur);
+    }
+
+    public static string? LatestValidCapXCapture(string root, DateTime? notBeforeUtc = null)
+    {
+        if (!Directory.Exists(root)) return null;
+        return Directory.EnumerateFiles(root, "*.json", SearchOption.AllDirectories)
+            .Where(p => notBeforeUtc is null || File.GetLastWriteTimeUtc(p) >= notBeforeUtc.Value)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault(p => CapXDurationMs(p) is not null);
     }
 
     public static void OpenPath(string path)

@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("Status","Install","Collect","Restore")]
+    [ValidateSet("Status","Install","Collect","ResetLive","Restore")]
     [string]$Action,
 
     [Parameter(Mandatory=$true)]
@@ -759,6 +759,11 @@ try {
             Assert-GameClosed
             $dest = Collect-ResultsInternal $p $false
             [ordered]@{ ok=$true; destination=[string]$dest; status=(Get-TotalProfilerStatus $p) } | ConvertTo-Json -Depth 12 -Compress
+        }
+        "ResetLive" {
+            Assert-GameClosed
+            $dest = Collect-ResultsInternal $p $true
+            [ordered]@{ ok=$true; archived=$(if ($dest) { [string]$dest } else { "" }); status=(Get-TotalProfilerStatus $p) } | ConvertTo-Json -Depth 12 -Compress
         }
         "Restore" {
             $dest = Restore-Profiler $p

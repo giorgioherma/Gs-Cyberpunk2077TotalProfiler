@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.9 — native Windows controller
+## v0.2.10 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -99,3 +99,12 @@ While profiling, CapFrameX's **Running processes** list should contain Cyberpunk
 - The CapFrameX process-list warning now appears beside the capture workflow/CET binding instructions.
 - **RESET RESULT PATHS** resets both result locations without deleting captured data.
 - **RESTORE ORIGINAL STATE** replaces separate CET/GRSP restore controls and restores all TOTAL Profiler-managed profiler state in one operation. Capture/result folders are preserved.
+
+
+## v0.2.10 reset behavior
+
+**RESET RESULT PATHS** only restores folder configuration and never deletes capture data.
+
+**RESET CAPTURE STATE** is for incomplete/failed captures. It moves the current/latest raw GRSP capture, CET live profiler CSVs, and latest CapFrameX capture into `Results\Discarded\Reset_...`. This cleans the three-source capture state without uninstalling the profilers or deleting already-collected TOTAL Profiler results.
+
+A reset timestamp prevents old source captures from being accidentally reused by the next **COLLECT RESULTS**. The same boundary is advanced after each successful collection.

@@ -12,6 +12,7 @@ internal sealed class AppConfig
     public string Scenario { get; set; } = "TEST";
     public bool CetCoreOnly { get; set; }
     public string LastCapture { get; set; } = "";
+    public DateTimeOffset? CaptureResetUtc { get; set; }
 
     public static string StateDirectory
     {

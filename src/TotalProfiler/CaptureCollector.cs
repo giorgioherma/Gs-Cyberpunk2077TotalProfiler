@@ -14,7 +14,8 @@ internal static class CaptureCollector
         if (!Directory.Exists(cfg.CapFrameXResults)) throw new DirectoryNotFoundException("CapFrameX results folder does not exist. Select it in Setup.");
         Directory.CreateDirectory(cfg.ResultsDirectory);
 
-        var grsp = ProfilerServices.LatestGrspCapture(cfg.GameDirectory) ?? throw new InvalidOperationException("No GRSP capture was found. Did you press F11 twice?");
+        var minUtc = cfg.CaptureResetUtc?.UtcDateTime;
+        var grsp = ProfilerServices.LatestGrspCapture(cfg.GameDirectory, minUtc) ?? throw new InvalidOperationException("No GRSP capture was found after the last capture-state reset. Did you press F11 twice?");
         var gm = ProfilerServices.ReadGrspMeta(grsp);
         log?.Invoke($"GRSP found: {Path.GetFileName(grsp)} · {gm.DurationMs / 1000:F3}s");
 
@@ -29,7 +30,7 @@ internal static class CaptureCollector
 
         double target = gm.DurationMs;
         if (cm.DurationMs > 0 && target > 0) target = (target + cm.DurationMs) / 2.0;
-        var cap = ProfilerServices.ChooseCapXCapture(cfg.CapFrameXResults, target);
+        var cap = ProfilerServices.ChooseCapXCapture(cfg.CapFrameXResults, target, minUtc);
         if (cap.Path is null) throw new InvalidOperationException("No valid CapFrameX JSON capture was found in the configured results folder.");
         log?.Invoke($"CapFrameX chosen: {Path.GetFileName(cap.Path)} · {(cap.Duration ?? 0) / 1000:F3}s");
 
