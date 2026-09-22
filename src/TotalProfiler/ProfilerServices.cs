@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace GsCyberpunkTotalProfiler;
@@ -10,7 +9,7 @@ namespace GsCyberpunkTotalProfiler;
 internal static class ProfilerServices
 {
     public const string AppName = "G's Cyberpunk 2077 TOTAL Profiler";
-    public const string Version = "0.2.19";
+    public const string Version = "0.2.19-avA";
     public const string GrspVersion = "0.5.0";
     public const string CetVersion = "3.0.0-alpha6b";
     public const string CorrelatorVersion = "0.2.1-native";
@@ -45,18 +44,6 @@ internal static class ProfilerServices
         using var sha = SHA256.Create();
         using var fs = File.OpenRead(path);
         return Convert.ToHexString(sha.ComputeHash(fs)).ToLowerInvariant();
-    }
-
-    public static string DirectoryFingerprint(string root)
-    {
-        if (!Directory.Exists(root)) return "";
-        var rows = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
-            .Select(path => (Relative: Path.GetRelativePath(root, path).Replace('\\', '/'), Path: path))
-            .OrderBy(x => x.Relative, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.Relative, StringComparer.Ordinal)
-            .Select(x => x.Relative + "\0" + Sha256(x.Path));
-        var material = string.Join("\n", rows);
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material))).ToLowerInvariant();
     }
 
     public static string SafeName(string value)
@@ -257,8 +244,8 @@ internal static class ProfilerServices
         var targetDll = Path.Combine(pluginDir, "redscript_profiler_alpha.dll");
         var dataDir = Path.Combine(pluginDir, "redscript_profiler_alpha");
         var statePath = Path.Combine(pluginDir, ".gs_total_profiler_grsp_state.json");
-        var backupDataDir = Path.Combine(pluginDir, ".gs_total_profiler_grsp_data_ORIGINAL");
         Directory.CreateDirectory(pluginDir);
+        Directory.CreateDirectory(dataDir);
 
         string mode;
         GrspState state;
@@ -285,40 +272,12 @@ internal static class ProfilerServices
                     File.Copy(targetDll, backup);
                 }
             }
-
-            if (Directory.Exists(backupDataDir))
-                throw new InvalidOperationException($"GRSP data backup already exists: {backupDataDir}");
-
-            var dataExistedBefore = Directory.Exists(dataDir);
-            var originalDataFingerprint = "";
-            if (dataExistedBefore)
-            {
-                originalDataFingerprint = DirectoryFingerprint(dataDir);
-                CopyTree(dataDir, backupDataDir);
-                if (!string.Equals(DirectoryFingerprint(backupDataDir), originalDataFingerprint, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("GRSP data directory backup verification failed.");
-            }
-
-            state = new GrspState
-            {
-                Version = Version,
-                Mode = mode,
-                OriginalHash = originalHash ?? "",
-                InstalledHash = GrspDllSha256,
-                Backup = backup ?? "",
-                DataStateTracked = true,
-                DataDirExistedBefore = dataExistedBefore,
-                BackupDataDir = dataExistedBefore ? backupDataDir : "",
-                OriginalDataFingerprint = originalDataFingerprint
-            };
+            state = new GrspState { Version = Version, Mode = mode, OriginalHash = originalHash ?? "", InstalledHash = GrspDllSha256, Backup = backup ?? "" };
             File.WriteAllText(statePath, JsonSerializer.Serialize(state, JsonOpts) + Environment.NewLine);
         }
 
         File.Copy(srcDll, targetDll, true);
-        if (!string.Equals(Sha256(targetDll), GrspDllSha256, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("GRSP DLL install verification failed.");
-
-        Directory.CreateDirectory(dataDir);
+        if (!string.Equals(Sha256(targetDll), GrspDllSha256, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("GRSP DLL install verification failed.");
         var scenarioPath = Path.Combine(dataDir, "RSP_Scenario.txt");
         if (!File.Exists(scenarioPath) && File.Exists(srcScenario)) File.Copy(srcScenario, scenarioPath);
         File.WriteAllText(scenarioPath, SafeName(scenario.Trim().ToUpperInvariant()) + Environment.NewLine);
@@ -330,12 +289,9 @@ internal static class ProfilerServices
         if (IsGameRunning()) throw new InvalidOperationException("Cyberpunk 2077 is running. Close the game before restoring GRSP.");
         var pluginDir = Path.Combine(gameRoot, "red4ext", "plugins");
         var targetDll = Path.Combine(pluginDir, "redscript_profiler_alpha.dll");
-        var dataDir = Path.Combine(pluginDir, "redscript_profiler_alpha");
         var statePath = Path.Combine(pluginDir, ".gs_total_profiler_grsp_state.json");
         if (!File.Exists(statePath)) return "No TOTAL Profiler GRSP managed state was found.";
-
         var state = JsonSerializer.Deserialize<GrspState>(File.ReadAllText(statePath), JsonOpts) ?? throw new InvalidOperationException("GRSP managed-state file is invalid.");
-
         if (state.Mode == "replaced")
         {
             if (!File.Exists(state.Backup)) throw new InvalidOperationException("GRSP original DLL backup is missing.");
@@ -344,49 +300,9 @@ internal static class ProfilerServices
                 throw new InvalidOperationException("GRSP original DLL restore verification failed.");
             File.Delete(state.Backup);
         }
-        else if (state.Mode == "added" && File.Exists(targetDll) &&
-                 string.Equals(Sha256(targetDll), GrspDllSha256, StringComparison.OrdinalIgnoreCase))
-        {
-            File.Delete(targetDll);
-        }
-
-        if (state.DataStateTracked)
-        {
-            if (state.DataDirExistedBefore)
-            {
-                if (string.IsNullOrWhiteSpace(state.BackupDataDir) || !Directory.Exists(state.BackupDataDir))
-                    throw new InvalidOperationException("GRSP original data directory backup is missing.");
-                if (!string.IsNullOrWhiteSpace(state.OriginalDataFingerprint) &&
-                    !string.Equals(DirectoryFingerprint(state.BackupDataDir), state.OriginalDataFingerprint, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("GRSP original data directory backup fingerprint is wrong.");
-
-                if (Directory.Exists(dataDir)) Directory.Delete(dataDir, true);
-                CopyTree(state.BackupDataDir, dataDir);
-
-                if (!string.IsNullOrWhiteSpace(state.OriginalDataFingerprint) &&
-                    !string.Equals(DirectoryFingerprint(dataDir), state.OriginalDataFingerprint, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("GRSP data directory restoration failed verification.");
-
-                Directory.Delete(state.BackupDataDir, true);
-            }
-            else if (Directory.Exists(dataDir))
-            {
-                Directory.Delete(dataDir, true);
-            }
-        }
-        else
-        {
-            // Legacy v0.2.18 state did not snapshot the GRSP data directory. Remove only
-            // profiler output that is unquestionably ours; do not overwrite unknown data.
-            var results = Path.Combine(dataDir, "RESULTS");
-            if (Directory.Exists(results)) Directory.Delete(results, true);
-            if (state.Mode == "added" && Directory.Exists(dataDir)) Directory.Delete(dataDir, true);
-        }
-
+        else if (state.Mode == "added" && File.Exists(targetDll) && string.Equals(Sha256(targetDll), GrspDllSha256, StringComparison.OrdinalIgnoreCase)) File.Delete(targetDll);
         File.Delete(statePath);
-        return state.DataStateTracked
-            ? "GRSP DLL and data directory restored exactly to the pre-profiler state."
-            : "GRSP DLL restored; legacy profiler RESULTS cleaned.";
+        return "GRSP DLL managed state restored. Capture RESULTS were left untouched.";
     }
 
     public static string SyncCetProfilerControls(string gameRoot)
@@ -410,10 +326,9 @@ internal static class ProfilerServices
         Directory.CreateDirectory(cetRoot);
         var bindingsPath = Path.Combine(cetRoot, "bindings.json");
         var statePath = Path.Combine(cetRoot, ".gctp_cet_profiler_binding_state.json");
-        var bindingsFileExisted = File.Exists(bindingsPath);
 
         System.Text.Json.Nodes.JsonObject root;
-        if (bindingsFileExisted)
+        if (File.Exists(bindingsPath))
         {
             var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(bindingsPath));
             root = parsed as System.Text.Json.Nodes.JsonObject ?? throw new InvalidOperationException("CET bindings.json root is not an object.");
@@ -426,7 +341,6 @@ internal static class ProfilerServices
             var hadNode = root[modName] is not null;
             var state = new System.Text.Json.Nodes.JsonObject
             {
-                ["bindingsFileExisted"] = bindingsFileExisted,
                 ["hadNode"] = hadNode,
                 ["node"] = hadNode ? root[modName]!.DeepClone() : null
             };
@@ -463,32 +377,21 @@ internal static class ProfilerServices
         else root = new System.Text.Json.Nodes.JsonObject();
 
         var hadNode = state["hadNode"]?.GetValue<bool>() == true;
-        var existedNode = state["bindingsFileExisted"];
-        var bindingsFileExisted = existedNode is null || existedNode.GetValue<bool>();
         if (hadNode && state["node"] is not null) root["CETProfilerControls"] = state["node"]!.DeepClone();
         else root.Remove("CETProfilerControls");
 
-        if (!bindingsFileExisted && root.Count == 0)
-        {
-            if (File.Exists(bindingsPath)) File.Delete(bindingsPath);
-        }
-        else
-        {
-            File.WriteAllText(bindingsPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
-        }
-
+        File.WriteAllText(bindingsPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
         File.Delete(statePath);
         return "CET binding state restored.";
     }
 
-    public static async Task<JsonDocument> CallCetAsync(string action, string gameRoot, string? resultsRoot = null, bool coreOnly = false, bool discardLiveOnRestore = false)
+    public static async Task<JsonDocument> CallCetAsync(string action, string gameRoot, string? resultsRoot = null, bool coreOnly = false)
     {
         var script = Path.Combine(ComponentsDirectory, "cet", "CET_Manager_Core.ps1");
         if (!File.Exists(script)) throw new FileNotFoundException("Bundled CET manager is missing.", script);
         var args = new List<string> { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Quote(script), "-Action", action, "-GameRoot", Quote(gameRoot) };
         if (!string.IsNullOrWhiteSpace(resultsRoot)) { args.Add("-ResultsRoot"); args.Add(Quote(resultsRoot!)); }
         if (coreOnly) args.Add("-CoreProfilerOnly");
-        if (discardLiveOnRestore) args.Add("-DiscardLiveResultsOnRestore");
         var psi = new ProcessStartInfo("powershell.exe", string.Join(' ', args))
         {
             RedirectStandardOutput = true,
@@ -617,10 +520,6 @@ internal static class ProfilerServices
         public string OriginalHash { get; set; } = "";
         public string InstalledHash { get; set; } = "";
         public string Backup { get; set; } = "";
-        public bool DataStateTracked { get; set; }
-        public bool DataDirExistedBefore { get; set; }
-        public string BackupDataDir { get; set; } = "";
-        public string OriginalDataFingerprint { get; set; } = "";
     }
 }
 
