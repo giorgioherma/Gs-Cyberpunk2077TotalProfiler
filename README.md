@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.18 — native Windows controller
+## v0.2.19 — Measurement / Results workflow
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -21,20 +21,23 @@ The app is not a self-extracting executable. The profiler payloads remain visibl
 
 ## Setup
 
-v0.2.14 uses a three-step guided interface:
+v0.2.19 uses a four-step guided interface:
 
-1. **SETUP** — select the Cyberpunk 2077 directory. Bundled CapFrameX 1.9.0 and local Results are used automatically. Custom CapFrameX/results paths are collapsed under Advanced setup.
-2. **INSTALL & VERIFY** — choose installation options, install/verify GRSP + CET + CapFrameX configuration, and continue only when the visible checks pass.
-3. **CAPTURE & RESULTS** — name the capture, launch CapFrameX/Cyberpunk, perform the shared F11 capture, collect results, compare, and open the report.
+1. **SETUP** — select the Cyberpunk 2077 directory. Bundled CapFrameX and the local Results folder are used automatically unless custom paths are selected.
+2. **INSTALL & VERIFY** — install/verify GRSP, CET, 0-Engine integration and CapFrameX capture configuration. The scenario/capture name is shared with Measurement.
+3. **MEASUREMENT** — run one synchronized F11 measurement. The page keeps the launch/readiness controls and **RESET CAPTURE STATE**, but no result-processing controls.
+4. **RESULTS** — **COLLECT RESULTS**, **COMPARE RESULTS**, **OPEN LAST**, open the current report/folder, return to Measurement, or **RESTORE GAME FILES**.
 
 Current capture control:
 
 - **F11 once** — starts GRSP + CET + CapFrameX.
-- **F11 again** — stops all three and CET automatically exports its CSVs.
+- **F11 again** — stops all three; CET exports its CSVs automatically.
 
-Before every capture, confirm CapFrameX's **Running processes** contains Cyberpunk 2077 only.
+On the first run, make sure CapFrameX's Capture hotkey, the REDscript profiler's current hard-coded key, and CET's profiler binding are all F11. If CapFrameX does not record, make sure `Cyberpunk2077.exe` is the only active capture process.
 
-The app creates a canonical capture directory containing `Raw/`, `Combined/`, `CaptureManifest.json`, plus the final `*_FULL.zip` inside the same capture folder.
+**COLLECT RESULTS** creates the canonical capture directory, then opens that directory so the raw files are visible immediately. The capture contains `Raw/`, `Combined/`, `CaptureManifest.json`, and after correlation the final `*_FULL.zip`.
+
+**RESTORE GAME FILES** restores TOTAL Profiler-managed game files/configuration to the pre-profiler state and discards uncollected profiler output. Already-collected TOTAL Profiler Results are preserved.
 
 ## Correlator interpretation
 
@@ -194,3 +197,17 @@ This fixes the specific exception:
 `Value of Key CaptureTime has invalid Format: Expected value of type Double but found Int32`.
 
 No administrator/elevation change and no CapFrameX binary patch is used.
+
+
+## v0.2.19 Measurement / Results workflow and exact restore
+
+- Splits the former **Capture & Results** screen into **Measurement** and **Results**.
+- Keeps the Install/Verify scenario name and Measurement capture name synchronized as one value.
+- Removes the CapFrameX process-confirmation checkbox and replaces it with concise first-run synchronization guidance.
+- Keeps **RESET CAPTURE STATE** on Measurement for failed/incomplete three-profiler runs.
+- **COLLECT RESULTS** now opens the collected capture directory.
+- Adds a dedicated **CHECK RESULTS HERE!** link that prefers an HTML report when available.
+- Moves restore to the Results page as **RESTORE GAME FILES**.
+- New installs snapshot the complete GRSP data directory and any pre-existing CETProfilerControls directory so restore can return them exactly.
+- CET binding restore now also remembers whether `bindings.json` existed before installation.
+- Restore discards uncollected GRSP/CET/current CapFrameX capture output instead of silently preserving live profiler residue. Already-collected Results remain.
