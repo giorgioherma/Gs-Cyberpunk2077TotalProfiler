@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.16 — native Windows controller
+## v0.2.17 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -163,3 +163,13 @@ v0.2.16 restores the exact CapFrameX integration used before that experiment:
 - CaptureDelay=0
 
 The v0.2.15 native correlator HTML timeline graph is retained.
+
+
+## v0.2.17 CapFrameX beta switch
+
+- Bundled CapFrameX changed from stable 1.9.0 to the current official **v1.9.1 beta** portable package.
+- Current upstream beta asset: **build 1.9.1.2 Beta**, `CapFrameX_1.9.1.2_Beta_Portable.zip`.
+- The exact upstream archive SHA-256 is verified during GitHub Actions: `acd8f82598bc794d8f666996eb8157c445c05af0fc04c9e4129e4ac76bf1086a`.
+- No CapFrameX binary patching is applied.
+- TOTAL Profiler still configures only its required portable capture settings: F11, unlimited capture time, zero delay, and the bundled Portable/Captures path.
+- The native HTML combined-timeline graph from v0.2.15 remains.
