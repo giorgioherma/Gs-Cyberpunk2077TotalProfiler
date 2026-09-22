@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.13 — native Windows controller
+## v0.2.14 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -139,3 +139,19 @@ TOTAL Profiler now seeds/updates only `CaptureHotKey=F11`, `CaptureTime=0`, and 
 - COLLECT RESULTS verifies the app-side copies, then leaves CET live CSVs cleared and clears GRSP's game-side RESULTS directory.
 - RESET RESULT PATHS was removed from the action bar; paths remain editable through Browse.
 - The final `*_FULL.zip` is stored inside its corresponding `Capture_...\` directory, leaving one top-level item per capture.
+
+
+## v0.2.14 — Pass 13 features with v0.2.12 CapFrameX frozen
+
+v0.2.14 keeps the desired v0.2.13 TOTAL Profiler changes:
+
+- one shared **F11** for CET start / stop + automatic CET CSV export
+- the responsive two-axis scrolling UI
+- verified post-collection cleanup of live GRSP/CET source results
+- the final `*_FULL.zip` stored inside its matching `Capture_...\` folder
+
+CapFrameX is deliberately frozen to the exact TOTAL Profiler **v0.2.12 integration**. No CapFrameX source patch or custom CapFrameX build is applied. The Windows workflow continues to download the official stable CapFrameX 1.9.0 portable release and verifies the exact upstream archive SHA-256:
+
+`00d56035681b975cee2fa392b93024ad60aaf9c0d1fcea91e8cb9c0fb6f1803a`
+
+The v0.2.12 CapFrameX configuration behavior is retained unchanged: bundled portable mode, F11 capture hotkey, CaptureTime=0, CaptureDelay=0, and CapFrameX owns all other UI/sound settings.
