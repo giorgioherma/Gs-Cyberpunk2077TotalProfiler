@@ -1251,7 +1251,7 @@ internal sealed class MainForm : Form
         ProfilerServices.OpenPath(cfg.ResultsDirectory);
     }
 
-    private void OpenLatest()    private void OpenLatest()
+    private void OpenLatest()
     {
         SaveConfig();
 
