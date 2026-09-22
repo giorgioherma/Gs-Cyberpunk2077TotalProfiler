@@ -30,7 +30,7 @@ internal sealed class MainForm : Form
         Text = ProfilerServices.AppName;
         Width = 1160;
         Height = 780;
-        MinimumSize = new Size(980, 680);
+        MinimumSize = new Size(800, 560);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9F);
         BuildUi();
@@ -41,15 +41,30 @@ internal sealed class MainForm : Form
 
     private void BuildUi()
     {
-        var outer = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 7, AutoScroll = true };
-        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        Controls.Add(outer);
+        // A dedicated scroll host fixes WinForms TableLayoutPanel's one-axis
+        // AutoScroll behavior when the window is smaller than the full dashboard.
+        var scrollHost = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        Controls.Add(scrollHost);
+        var outer = new TableLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(12),
+            ColumnCount = 1,
+            RowCount = 7,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            MinimumSize = new Size(940, 0)
+        };
+        for (int i = 0; i < 7; i++) outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        scrollHost.Controls.Add(outer);
+
+        void FitContentWidth()
+        {
+            var usable = Math.Max(940, scrollHost.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 4);
+            if (outer.Width != usable) outer.Width = usable;
+        }
+        scrollHost.ClientSizeChanged += (_, _) => FitContentWidth();
+        FitContentWidth();
 
         var titlePanel = new Panel { Dock = DockStyle.Fill, Height = 62 };
         var title = new Label { Text = ProfilerServices.AppName, Font = new Font("Segoe UI Semibold", 18F), AutoSize = true, Location = new Point(0, 0) };
@@ -68,9 +83,7 @@ internal sealed class MainForm : Form
         AddPathRow(setupGrid, 3, "TOTAL Profiler results", resultsBox, BrowseResults, "Open", () => ProfilerServices.OpenPath(resultsBox.Text));
         var settings = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Padding = new Padding(0, 7, 0, 0) };
         settings.Controls.Add(new Label { Text = "Shared profiling key:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
-        settings.Controls.Add(new Label { Text = ProfilerServices.CaptureKey, AutoSize = true, Font = new Font("Segoe UI Semibold", 9F), Margin = new Padding(0, 6, 20, 0) });
-        settings.Controls.Add(new Label { Text = "CET result export key:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
-        settings.Controls.Add(new Label { Text = ProfilerServices.CetExportKey, AutoSize = true, Font = new Font("Segoe UI Semibold", 9F), Margin = new Padding(0, 6, 20, 0) });
+        settings.Controls.Add(new Label { Text = $"{ProfilerServices.CaptureKey}  (TOTAL Profiler managed)", AutoSize = true, Font = new Font("Segoe UI Semibold", 9F), Margin = new Padding(0, 6, 20, 0) });
         settings.Controls.Add(new Label { Text = "Scenario:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
         scenarioBox.Width = 155; settings.Controls.Add(scenarioBox);
         coreOnly.Text = "CET core profiler only — leave 0-Engine untouched"; coreOnly.AutoSize = true; coreOnly.Margin = new Padding(20, 3, 0, 0); settings.Controls.Add(coreOnly);
@@ -94,7 +107,7 @@ internal sealed class MainForm : Form
         var status = Group("Profiler status");
         var sg = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 7, AutoSize = true };
         sg.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170)); sg.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); sg.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        AddStatusRow(sg, 0, "Game", gameStatus); AddStatusRow(sg, 1, "GRSP", grspStatus); AddStatusRow(sg, 2, "CET profiler", cetStatus); AddStatusRow(sg, 3, "0-Engine / Scheduler", zeroStatus); AddStatusRow(sg, 4, "CapFrameX", capStatus); AddStatusRow(sg, 5, "Install check", installStatus); AddStatusRow(sg, 6, "Capture keys", new Label { AutoSize = true, Text = "F11 shared capture · F12 CET export" });
+        AddStatusRow(sg, 0, "Game", gameStatus); AddStatusRow(sg, 1, "GRSP", grspStatus); AddStatusRow(sg, 2, "CET profiler", cetStatus); AddStatusRow(sg, 3, "0-Engine / Scheduler", zeroStatus); AddStatusRow(sg, 4, "CapFrameX", capStatus); AddStatusRow(sg, 5, "Install check", installStatus); AddStatusRow(sg, 6, "Capture key", new Label { AutoSize = true, Text = "F11 starts · F11 stops all + CET auto-exports" });
         var refresh = new Button { Text = "Refresh status", Width = 105, Height = 28, Anchor = AnchorStyles.Top | AnchorStyles.Right };
         refresh.Click += async (_, _) => await RefreshStatusAsync(); sg.Controls.Add(refresh, 2, 0); sg.SetRowSpan(refresh, 2);
         status.Controls.Add(sg); outer.Controls.Add(status);
@@ -105,17 +118,17 @@ internal sealed class MainForm : Form
         collectButton.Text = "COLLECT RESULTS"; collectButton.Width = 155; collectButton.Height = 34; collectButton.Click += async (_, _) => await CollectAsync();
         compareButton.Text = "COMPARE RESULTS"; compareButton.Width = 155; compareButton.Height = 34; compareButton.Click += async (_, _) => await CompareAsync();
         var openLatest = new Button { Text = "Open latest", Width = 115, Height = 34 }; openLatest.Click += (_, _) => OpenLatest();
-        var resetResults = new Button { Text = "RESET RESULT PATHS", Width = 155, Height = 34 }; resetResults.Click += (_, _) => ResetResultPaths();
         var resetCapture = new Button { Text = "RESET CAPTURE STATE", Width = 165, Height = 34 }; resetCapture.Click += async (_, _) => await ResetCaptureStateAsync();
         var resetCaptureNote = new Label { Text = "Archives partial raw GRSP/CET/CapFrameX state; collected Results stay.", AutoSize = true, Margin = new Padding(8, 10, 12, 0), ForeColor = SystemColors.GrayText };
         var restoreAll = new Button { Text = "RESTORE ORIGINAL STATE", Width = 190, Height = 34 }; restoreAll.Click += async (_, _) => await RestoreAllAsync();
-        af.Controls.AddRange([installButton, collectButton, compareButton, openLatest, resetResults, resetCapture, resetCaptureNote, restoreAll]); actions.Controls.Add(af); outer.Controls.Add(actions);
+        af.Controls.AddRange([installButton, collectButton, compareButton, openLatest, resetCapture, resetCaptureNote, restoreAll]); actions.Controls.Add(af); outer.Controls.Add(actions);
 
         var workflow = Group("Capture workflow");
-        var wf = new Label { AutoSize = true, MaximumSize = new Size(1060, 0), Text = $"1) INSTALL PROFILERS and confirm Install check = VERIFIED ✓.   2) Launch CapFrameX and Cyberpunk 2077.   3) F11 starts GRSP + CET + CapFrameX.   4) F11 stops all three.   5) F12 exports CET CSVs.   6) Close the game.   7) COLLECT RESULTS.   8) COMPARE RESULTS.\r\n\r\nCET note: after first profiler install, bind 'Profiler: START / PAUSE / RESUME' to F11 and 'Profiler: CREATE CSV' to F12 in CET > Bindings.\r\nCapFrameX note: TOTAL Profiler configures F11 + unlimited capture (0 s) automatically; CapFrameX keeps its own sound/UI defaults. While profiling, Cyberpunk 2077 should be the only app in CapFrameX 'Running processes'; move anything else to its ignore list.\r\nBundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion}; Browse may link any compatible version." };
+        var wf = new Label { AutoSize = true, MaximumSize = new Size(1060, 0), Text = $"1) INSTALL PROFILERS and confirm Install check = VERIFIED ✓.   2) Launch CapFrameX and Cyberpunk 2077.   3) F11 starts GRSP + CET + CapFrameX.   4) F11 stops all three and CET exports automatically.   5) Close the game.   6) COLLECT RESULTS (copies + clears live GRSP/CET game-side results).   7) COMPARE RESULTS.\r\n\r\nCET note: TOTAL Profiler manages the CETProfilerControls F11 binding automatically; no CET Bindings setup and no F12 step are required.\r\nCapFrameX note: TOTAL Profiler configures F11 + unlimited capture (0 s) automatically; CapFrameX keeps its own sound/UI defaults. While profiling, Cyberpunk 2077 should be the only app in CapFrameX 'Running processes'; move anything else to its ignore list.\r\nBundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion}; Browse may link any compatible version." };
         workflow.Controls.Add(wf); outer.Controls.Add(workflow);
 
         var logGroup = Group("Log");
+        logGroup.AutoSize = false; logGroup.Height = 190; logGroup.MinimumSize = new Size(0, 190);
         logBox.Dock = DockStyle.Fill; logBox.Multiline = true; logBox.ReadOnly = true; logBox.ScrollBars = ScrollBars.Vertical; logBox.Font = new Font("Consolas", 9F); logBox.BackColor = SystemColors.Window;
         logGroup.Controls.Add(logBox); outer.Controls.Add(logGroup);
 
@@ -368,19 +381,32 @@ internal sealed class MainForm : Form
     private async Task InstallAsync() => await RunBusy(async () =>
     {
         if (ProfilerServices.IsGameRunning()) throw new InvalidOperationException("Cyberpunk 2077 is running. Close it before installation.");
-        Log("Installing GRSP 0.5.0...");
+
+        Log("Installing/verifying GRSP 0.5.0...");
         var gr = await Task.Run(() => ProfilerServices.InstallGrsp(cfg.GameDirectory, cfg.Scenario));
         Log($"GRSP: {gr.Mode} -> {gr.Dll}");
 
-        Log($"Installing CET Runtime Profiler {ProfilerServices.CetVersion}...");
-        using var cet = await ProfilerServices.CallCetAsync("Install", cfg.GameDirectory, cfg.ResultsDirectory, cfg.CetCoreOnly);
-        Log($"CET: {J(cet.RootElement,"cet")} · 0-Engine mode: {J(cet.RootElement,"managedMode")}");
+        using (var before = await ProfilerServices.CallCetAsync("Status", cfg.GameDirectory))
+        {
+            var br = before.RootElement;
+            if (J(br, "managed") == "True" && J(br, "cet") == "PROFILER_ACTIVE")
+            {
+                Log("CET profiler is already managed; keeping the installed profiler/0-Engine state and updating TOTAL Profiler controls only.");
+            }
+            else
+            {
+                Log($"Installing CET Runtime Profiler {ProfilerServices.CetVersion}...");
+                using var cet = await ProfilerServices.CallCetAsync("Install", cfg.GameDirectory, cfg.ResultsDirectory, cfg.CetCoreOnly);
+                Log($"CET: {J(cet.RootElement,"cet")} · 0-Engine mode: {J(cet.RootElement,"managedMode")}");
+            }
+        }
+
+        Log(await Task.Run(() => ProfilerServices.SyncCetProfilerControls(cfg.GameDirectory)));
+        Log(await Task.Run(() => ProfilerServices.ConfigureCetProfilerBinding(cfg.GameDirectory)));
 
         if (File.Exists(cfg.CapFrameXExe)) Log(await Task.Run(() => ProfilerServices.ConfigureCapFrameXF11BestEffort(cfg.CapFrameXExe)));
         else Log("CapFrameX was not found. The bundled copy may be missing; Browse may link an existing compatible version.");
 
-        // Installation is not declared successful until we can read back the exact
-        // GRSP DLL and CET manager state from the game directory.
         var liveGrsp = Path.Combine(cfg.GameDirectory, "red4ext", "plugins", "redscript_profiler_alpha.dll");
         if (!File.Exists(liveGrsp) || !string.Equals(ProfilerServices.Sha256(liveGrsp), ProfilerServices.GrspDllSha256, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("GRSP installation verification failed.");
@@ -390,16 +416,16 @@ internal sealed class MainForm : Form
         if (J(vr, "cet") != "PROFILER_ACTIVE" || J(vr, "managed") != "True" || J(vr, "controlsPresent") != "True")
             throw new InvalidOperationException("CET installation verification failed. TOTAL Profiler did not receive PROFILER_ACTIVE + managed + controlsPresent.");
 
-        Log("Installation verification: GRSP ✓ · CET profiler ✓ · CET controls ✓");
+        Log("Installation verification: GRSP ✓ · CET profiler ✓ · CET controls ✓ · shared F11 binding managed ✓");
         await RefreshStatusAsync();
 
         MessageBox.Show(this,
             "Profiler install VERIFIED.\r\n\r\n" +
             "GRSP: installed and exact DLL hash confirmed.\r\n" +
             "CET profiler: PROFILER_ACTIVE and managed state confirmed.\r\n" +
-            "CET controls: present.\r\n\r\n" +
-            "GRSP uses F11 automatically.\r\nCapFrameX is configured automatically: F11 + unlimited capture. Its own sound/UI defaults are left untouched.\r\n\r\n" +
-            "CET requires one binding step in-game:\r\n  Profiler: START / PAUSE / RESUME -> F11\r\n  Profiler: CREATE CSV -> F12",
+            "CET controls: present and F11 binding managed automatically.\r\n" +
+            "CapFrameX: F11 + unlimited capture configured.\r\n\r\n" +
+            "Workflow: F11 starts all three. The second F11 stops all three and CET writes its CSVs automatically.",
             ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
     });
 
@@ -431,9 +457,12 @@ internal sealed class MainForm : Form
         try { manifest = JsonSerializer.Deserialize<Dictionary<string,object?>>(File.ReadAllText(manifestPath), ProfilerServices.JsonOpts) ?? []; } catch { manifest = []; }
         manifest["correlated_local"] = DateTimeOffset.Now.ToString("O"); manifest["combined_report"] = result.Report; manifest["native_correlator_sync_quality"] = result.SyncQuality; manifest["native_correlator_frametime_correlation"] = result.Correlation; manifest["native_correlator_frame_offset"] = result.FrameOffset;
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, ProfilerServices.JsonOpts) + Environment.NewLine);
-        var fullZip = Path.Combine(Path.GetDirectoryName(cfg.LastCapture)!, Path.GetFileName(cfg.LastCapture) + "_FULL.zip");
-        await Task.Run(() => ProfilerServices.CreateDirectoryZip(cfg.LastCapture, fullZip));
-        Log($"Portable full package: {fullZip}");
+        var fullZip = Path.Combine(cfg.LastCapture, Path.GetFileName(cfg.LastCapture) + "_FULL.zip");
+        if (File.Exists(fullZip)) File.Delete(fullZip);
+        var tempZip = Path.Combine(Path.GetTempPath(), $"GCTP_{Guid.NewGuid():N}.zip");
+        await Task.Run(() => ProfilerServices.CreateDirectoryZip(cfg.LastCapture, tempZip));
+        File.Move(tempZip, fullZip, true);
+        Log($"Portable full package stored inside capture folder: {fullZip}");
         ProfilerServices.OpenPath(result.Report); ProfilerServices.OpenPath(combined);
         MessageBox.Show(this, $"Correlation complete.\r\n\r\nReport:\r\n{result.Report}\r\n\r\nFull shareable capture package:\r\n{fullZip}", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
     });
@@ -470,6 +499,17 @@ internal sealed class MainForm : Form
             {
                 failed = true;
                 notes.Add("CET / 0-Engine: RESTORE FAILED · " + ex.Message.Split('\n').Last());
+            }
+
+            try
+            {
+                var msg = await Task.Run(() => ProfilerServices.RestoreCetProfilerBinding(cfg.GameDirectory));
+                notes.Add("CET binding: " + msg);
+            }
+            catch (Exception ex)
+            {
+                failed = true;
+                notes.Add("CET binding: RESTORE FAILED · " + ex.Message);
             }
 
             try

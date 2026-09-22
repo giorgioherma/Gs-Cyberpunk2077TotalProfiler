@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.12 — native Windows controller
+## v0.2.13 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -128,3 +128,14 @@ The bundled portable AppSettings are seeded at build time, and **INSTALL PROFILE
 The bundled CapFrameX now receives a real `portable.json` beside `CapFrameX.exe`. This is the switch CapFrameX 1.9.0 actually uses to enter portable mode; merely creating `Portable\Config` and `Portable\Captures` is not enough.
 
 TOTAL Profiler now seeds/updates only `CaptureHotKey=F11`, `CaptureTime=0`, and `CaptureDelay=0`. CapFrameX keeps ownership of all other UI, sound, sensor, and capture settings. This avoids rewriting unrelated AppSettings fields and keeps the Capture page on upstream defaults.
+
+
+## v0.2.13 capture workflow integration
+
+- Window content is hosted in a real two-axis scroll panel; resizing to a shorter window now provides vertical scrolling as well as horizontal scrolling.
+- The TOTAL Profiler CET control variant uses one input: first press starts; second press stops and immediately dumps CSV results.
+- TOTAL Profiler writes the CETProfilerControls binding automatically to F11. Users no longer bind CET manually and there is no F12 export step in TOTAL Profiler.
+- The standalone CET Runtime Profiler package is unchanged; this one-key behavior exists only in TOTAL Profiler's bundled control payload.
+- COLLECT RESULTS verifies the app-side copies, then leaves CET live CSVs cleared and clears GRSP's game-side RESULTS directory.
+- RESET RESULT PATHS was removed from the action bar; paths remain editable through Browse.
+- The final `*_FULL.zip` is stored inside its corresponding `Capture_...\` directory, leaving one top-level item per capture.

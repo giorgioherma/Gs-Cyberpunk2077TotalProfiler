@@ -8,7 +8,7 @@ internal static class CaptureCollector
 {
     public static async Task<CollectResult> CollectAsync(AppConfig cfg, Action<string>? log = null)
     {
-        if (ProfilerServices.IsGameRunning()) throw new InvalidOperationException("Cyberpunk 2077 is still running. Close the game after F11/F12 before collecting results.");
+        if (ProfilerServices.IsGameRunning()) throw new InvalidOperationException("Cyberpunk 2077 is still running. Close the game after the second F11 before collecting results.");
         var valid = ProfilerServices.ValidateGameRoot(cfg.GameDirectory);
         if (!valid.Ok) throw new InvalidOperationException(valid.Message);
         if (!Directory.Exists(cfg.CapFrameXResults)) throw new DirectoryNotFoundException("CapFrameX results folder does not exist. Select it in Setup.");
@@ -46,14 +46,26 @@ internal static class CaptureCollector
         Directory.CreateDirectory(grspDst); Directory.CreateDirectory(cetDst); Directory.CreateDirectory(capDst);
         ProfilerServices.CopyTree(grsp, grspDst);
         ProfilerServices.CopyTree(cet, cetDst);
-        File.Copy(cap.Path, Path.Combine(capDst, Path.GetFileName(cap.Path)), true);
+        var capDstFile = Path.Combine(capDst, Path.GetFileName(cap.Path));
+        File.Copy(cap.Path, capDstFile, true);
+
+        // Do not clean live/game-side profiler output until the app-side raw copy is verified.
+        if (!File.Exists(Path.Combine(grspDst, "GRSP_Summary.csv")))
+            throw new InvalidOperationException("GRSP copy verification failed; game-side GRSP results were left untouched.");
+        if (!File.Exists(Path.Combine(cetDst, "CET_Runtime_Profile_Markers.csv")))
+            throw new InvalidOperationException("CET copy verification failed; archived CET results were left in staging.");
+        if (!File.Exists(capDstFile))
+            throw new InvalidOperationException("CapFrameX copy verification failed.");
 
         try
         {
+            // CET Manager Collect already verifies and removes the live CET CSVs from the
+            // game folder. This removes its temporary app-side staging archive after copy.
             Directory.Delete(cet, true);
             if (Directory.Exists(staging) && !Directory.EnumerateFileSystemEntries(staging).Any()) Directory.Delete(staging);
+            log?.Invoke("CET live profiler CSVs cleared from the game folder after verified collection.");
         }
-        catch { }
+        catch (Exception ex) { log?.Invoke("CET staging cleanup warning: " + ex.Message); }
 
         double? sd = gm.StartUnixMs > 0 && cm.StartUnixMs > 0 ? cm.StartUnixMs - gm.StartUnixMs : null;
         double? dd = gm.DurationMs > 0 && cm.DurationMs > 0 ? cm.DurationMs - gm.DurationMs : null;
@@ -84,6 +96,22 @@ internal static class CaptureCollector
             }
         };
         File.WriteAllText(Path.Combine(capture, "CaptureManifest.json"), JsonSerializer.Serialize(manifest, ProfilerServices.JsonOpts) + Environment.NewLine);
+
+        // The complete GRSP raw result now exists in the TOTAL Profiler capture.
+        // Clear GRSP's game-side RESULTS directory so the next run cannot be confused
+        // with stale captures and the game install stays clean.
+        try
+        {
+            var grspResultsRoot = Path.Combine(cfg.GameDirectory, "red4ext", "plugins", "redscript_profiler_alpha", "RESULTS");
+            if (Directory.Exists(grspResultsRoot))
+            {
+                foreach (var dir in Directory.EnumerateDirectories(grspResultsRoot)) Directory.Delete(dir, true);
+                foreach (var file in Directory.EnumerateFiles(grspResultsRoot)) File.Delete(file);
+            }
+            log?.Invoke("GRSP game-side RESULTS cleared after verified collection.");
+        }
+        catch (Exception ex) { log?.Invoke("GRSP game-side cleanup warning: " + ex.Message); }
+
         log?.Invoke($"Collected into: {capture}");
         if (sd is not null) log?.Invoke($"GRSP↔CET START delta: {sd:F3} ms");
         if (dd is not null) log?.Invoke($"GRSP↔CET duration delta: {dd:F3} ms");
