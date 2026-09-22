@@ -1,0 +1,38 @@
+{
+  "packageVersion": "3.0.0-alpha6b",
+  "profilerNativeVersion": "2.11.0",
+  "targetCET": {
+    "version": "1.37.1",
+    "officialSha256": "43a7b94698979703f9dfa2b0950607c9a88f53b84bbf09a8e593c7e218d41059",
+    "profilerSha256": "011a9d3fc908e7cce3309ac5b4520ba9a3db5ad301edc6d2a465ca4c77486768"
+  },
+  "zeroEngine": {
+    "policy": "unverified-by-default; preserve existing integrated Scheduler; adaptively inject into recognized user init.lua; optional core-profiler fallback leaves 0-Engine completely untouched",
+    "profilerBridgeMarker": "CET_RUNTIME_PROFILER_ADAPTIVE_SCHEDULER_BEGIN v2",
+    "profilerSchedulerSha256": "4030ef6d8fa743f7a4accf00406c2110f70162261232b564469d3eaa0b7c78cb",
+    "profilerSchedulerVersion": "0.3.1 profiler-aware",
+    "profilerAdaptiveSchedulerSha256": "4030ef6d8fa743f7a4accf00406c2110f70162261232b564469d3eaa0b7c78cb",
+    "profilerAdaptiveSchedulerFile": "modules/CETProfilerScheduler.lua"
+  },
+  "liveResultFiles": [
+    "CET_Runtime_Profile_ByMod.csv",
+    "CET_Runtime_Profile_ByModKind.csv",
+    "CET_Runtime_Profile_Detail.csv",
+    "CET_Runtime_Profile_Spikes.csv",
+    "CET_Runtime_Profile_Timeline.csv",
+    "CET_Runtime_Profile_Markers.csv",
+    "CET_Runtime_Profile_Scheduler_ByJob.csv",
+    "CET_Runtime_Profile_Scheduler_Spikes.csv",
+    "CET_Runtime_Profile_Scheduler_FrameBursts.csv"
+  ],
+  "managerChanges": [
+    "0-Engine status reports FOUND - UNVERIFIED instead of claiming arbitrary versions are compatible",
+    "Core profiler fallback leaves the user's 0-Engine folder and Scheduler completely untouched and loaded normally",
+    "recognized unintegrated 0-Engine versions are patched transactionally using their own init.lua",
+    "adaptive mode uses unique modules/CETProfilerScheduler.lua to avoid colliding with 0-Engine Scheduler.lua",
+    "existing PASS/Scheduler-integrated 0-Engine keeps the proven Scheduler.lua swap path",
+    "event-driven status refresh on window activation plus manual refresh",
+    "results remain package-local and popup displays exact archive destination",
+    "CETProfilerControls always removed on restore"
+  ]
+}

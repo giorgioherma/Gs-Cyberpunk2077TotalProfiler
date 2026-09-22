@@ -1,0 +1,52 @@
+{
+  "name": "GRSP 0.5.0 Public Preview — G-REDscript Profiler",
+  "version": "0.5.0",
+  "internal_plugin_name": "redscript-profiler-alpha",
+  "compatibility_note": "internal DLL/plugin name intentionally retained for in-place replacement of Alpha 0.4",
+  "measurement_basis": "Alpha 0.4 exact observed InvokeStatic/InvokeVirtual call-edge profiler",
+  "red4ext_rs_rev": "c44146c",
+  "bind_function_hash": 777921665,
+  "default_state": "PAUSED",
+  "hotkey": "F11",
+  "hotkey_poll_ms": 2,
+  "sampling": false,
+  "timing_clock": "QueryPerformanceCounter",
+  "public_timeline_bucket_ms": 50,
+  "cross_profiler_timebase": ["capture_relative_ms", "unix_epoch_ms"],
+  "public_outputs": [
+    "GRSP_Report.html",
+    "GRSP_Summary.csv",
+    "GRSP_ByMod.csv",
+    "GRSP_ByFunction.csv",
+    "GRSP_Timeline.csv",
+    "GRSP_Frames.csv",
+    "GRSP_Spikes.csv",
+    "GRSP_Markers.csv",
+    "GRSP_FrameworkCandidates.csv",
+    "GRSP_Status.txt"
+  ],
+  "developer_outputs": [
+    "Developer/RSP_FunctionMap.csv",
+    "Developer/RSP_CallSites.csv",
+    "Developer/RSP_SharedTargets.csv",
+    "Developer/RSP_Cadence.csv",
+    "Developer/RSP_WrapperChains.csv",
+    "Developer/RSP_WorkMap.csv"
+  ],
+  "trust_gates": [
+    "shard_merge_ok=true",
+    "merged_shards==observed_threads",
+    "frame_quality=GOOD",
+    "unresolved_static_calls negligible",
+    "dropped_spikes=0 or understood",
+    "dropped_hot_paths=0 or understood"
+  ],
+  "limitations": [
+    "not a whole CPU/GPU profiler",
+    "not every REDscript VM/intrinsic operation is observed",
+    "exclusive_instrumented_ms is instrumented-edge exclusive time rather than guaranteed full VM self time",
+    "wrapper boundaries can include uninstrumented/native/base work",
+    "virtual targets are not always concrete implementation ownership",
+    "profiler does not know mod dependency graphs and does not issue uninstall recommendations"
+  ]
+}
