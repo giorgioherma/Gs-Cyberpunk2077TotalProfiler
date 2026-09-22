@@ -79,23 +79,35 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           Copy-Item (Join-Path $capExe.Directory.FullName '*') $dest -Recurse -Force
 
-          # TOTAL Profiler defaults: key-controlled capture, no 20-second auto-stop,
-          # and audible start/stop confirmation. CapFrameX fills all other settings
-          # from its own defaults on first launch.
+          # Make the bundled upstream portable release ACTUALLY run in portable mode.
+          # CapFrameX detects this only from portable.json beside CapFrameX.exe.
+          $portable = [ordered]@{
+            portable = $true
+            paths = [ordered]@{
+              config = './Portable/Config'
+              captures = './Portable/Captures'
+              screenshots = './Portable/Screenshots'
+              logs = './Portable/Logs'
+              cloud = './Portable/Captures/Cloud'
+            }
+          }
+          $portable | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $dest 'portable.json')
+
           $cfgDir = Join-Path $dest 'Portable\Config'
-          $captureDir = Join-Path $dest 'Portable\Captures'
           New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null
-          New-Item -ItemType Directory -Force -Path $captureDir | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Captures') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Screenshots') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Logs') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Portable\Captures\Cloud') | Out-Null
+
+          # Seed only TOTAL Profiler's required capture controls.
+          # CapFrameX supplies all other settings from its own defaults.
           $appSettings = [ordered]@{
             CaptureHotKey = 'F11'
             CaptureTime = 0.0
-            UseGlobalCaptureTime = $true
             CaptureDelay = 0.0
-            HotkeySoundMode = 'Voice'
-            VoiceSoundLevel = 0.25
-            SimpleSoundLevel = 0.25
           }
-          $appSettings | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $cfgDir 'AppSettings.json')
+          $appSettings | ConvertTo-Json -Depth 3 | Set-Content -Encoding UTF8 (Join-Path $cfgDir 'AppSettings.json')
 
           $third = 'publish\THIRD_PARTY\CapFrameX'
           New-Item -ItemType Directory -Force -Path $third | Out-Null
@@ -120,7 +132,9 @@ jobs:
           if (!(Test-Path 'publish\components\grsp\red4ext\plugins\redscript_profiler_alpha.dll')) { throw 'GRSP payload missing' }
           if (!(Test-Path 'publish\components\cet\CET_Manager_Core.ps1')) { throw 'CET manager missing' }
           if (!(Test-Path 'publish\Tools\CapFrameX\CapFrameX.exe')) { throw 'Bundled CapFrameX missing' }
+          if (!(Test-Path 'publish\Tools\CapFrameX\portable.json')) { throw 'Bundled CapFrameX portable.json missing' }
           if (!(Test-Path 'publish\Tools\CapFrameX\Portable\Config\AppSettings.json')) { throw 'Bundled CapFrameX TOTAL Profiler settings missing' }
+          if (!(Test-Path 'publish\Tools\CapFrameX\Portable\Captures')) { throw 'Bundled CapFrameX Portable/Captures missing' }
           if (!(Test-Path 'publish\THIRD_PARTY\CapFrameX\LICENSE.txt')) { throw 'CapFrameX license notice missing' }
 
           $checks = @{
@@ -143,14 +157,14 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
           @(
             "G's Cyberpunk 2077 TOTAL Profiler"
-            'Version: 0.2.11'
+            'Version: 0.2.12'
             "Git commit: $env:GITHUB_SHA"
             'Runtime: .NET 8 self-contained win-x64'
             'Packaging: normal self-contained .NET files; NOT PyInstaller; NOT self-extracting'
             'Python required: no'
             '.NET installation required for TOTAL Profiler: no'
             'Bundled profiler payload hashes: verified during build'
-            'CapFrameX: upstream stable portable v1.9.0; F11; CaptureTime=0 unlimited; voice sounds; bundled captures Tools/CapFrameX/Portable/Captures'
+            'CapFrameX: upstream stable portable v1.9.0; real portable.json; F11; CaptureTime=0 unlimited; bundled captures Tools/CapFrameX/Portable/Captures'
           ) | Set-Content -Encoding UTF8 stage\BUILD_INFO.txt
 
           Push-Location stage

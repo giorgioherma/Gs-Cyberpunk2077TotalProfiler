@@ -9,7 +9,7 @@ namespace GsCyberpunkTotalProfiler;
 internal static class ProfilerServices
 {
     public const string AppName = "G's Cyberpunk 2077 TOTAL Profiler";
-    public const string Version = "0.2.11";
+    public const string Version = "0.2.12";
     public const string GrspVersion = "0.5.0";
     public const string CetVersion = "3.0.0-alpha6b";
     public const string CorrelatorVersion = "0.2.0-native";
@@ -100,40 +100,68 @@ internal static class ProfilerServices
 
     public static string ConfigureCapFrameXF11BestEffort(string exePath)
     {
-        var (_, cfg) = DetectCapFrameXPath(exePath);
-        if (cfg is null) return "CapFrameX settings folder could not be determined.";
+        var exe = Path.GetFullPath(exePath);
+        var bundled = string.Equals(exe, Path.GetFullPath(BundledCapFrameXExe), StringComparison.OrdinalIgnoreCase);
 
-        Directory.CreateDirectory(cfg);
+        string cfg;
+        if (bundled)
+        {
+            var capRoot = Path.GetDirectoryName(exe)!;
+            cfg = Path.Combine(capRoot, "Portable", "Config");
+            Directory.CreateDirectory(cfg);
+            Directory.CreateDirectory(Path.Combine(capRoot, "Portable", "Captures"));
+            Directory.CreateDirectory(Path.Combine(capRoot, "Portable", "Screenshots"));
+            Directory.CreateDirectory(Path.Combine(capRoot, "Portable", "Logs"));
+            Directory.CreateDirectory(Path.Combine(capRoot, "Portable", "Captures", "Cloud"));
+
+            // CapFrameX only enters portable mode when portable.json exists beside CapFrameX.exe.
+            // Without this file it silently uses AppData/Documents, which defeats our bundled layout.
+            var portablePath = Path.Combine(capRoot, "portable.json");
+            var portableJson = new
+            {
+                portable = true,
+                paths = new
+                {
+                    config = "./Portable/Config",
+                    captures = "./Portable/Captures",
+                    screenshots = "./Portable/Screenshots",
+                    logs = "./Portable/Logs",
+                    cloud = "./Portable/Captures/Cloud"
+                }
+            };
+            File.WriteAllText(portablePath, JsonSerializer.Serialize(portableJson, JsonOpts) + Environment.NewLine);
+        }
+        else
+        {
+            var detected = DetectCapFrameXPath(exe);
+            if (detected.Config is null) return "CapFrameX settings folder could not be determined.";
+            cfg = detected.Config;
+            Directory.CreateDirectory(cfg);
+        }
+
         var path = Path.Combine(cfg, "AppSettings.json");
-        System.Text.Json.Nodes.JsonObject obj;
-
         try
         {
+            System.Text.Json.Nodes.JsonObject obj;
             if (File.Exists(path))
             {
                 var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path));
-                obj = parsed as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
-
+                obj = parsed as System.Text.Json.Nodes.JsonObject ?? throw new InvalidOperationException("AppSettings.json root is not an object.");
                 var backup = path + ".TOTALProfiler.bak";
                 if (!File.Exists(backup)) File.Copy(path, backup);
             }
             else obj = new System.Text.Json.Nodes.JsonObject();
 
-            // TOTAL Profiler needs key-controlled, open-ended CapFrameX captures.
-            // CapFrameX upstream defaults CaptureTime to 20 seconds, so explicitly
-            // override it to 0 (unlimited until the second F11).
+            // Touch only the three settings TOTAL Profiler actually requires.
+            // Everything else remains CapFrameX-owned/defaulted.
             obj["CaptureHotKey"] = CaptureKey;
             obj["CaptureTime"] = 0.0;
-            obj["UseGlobalCaptureTime"] = true;
             obj["CaptureDelay"] = 0.0;
 
-            // Keep audible start/stop confirmation enabled for the bundled workflow.
-            obj["HotkeySoundMode"] = "Voice";
-            if (obj["VoiceSoundLevel"] is null) obj["VoiceSoundLevel"] = 0.25;
-            if (obj["SimpleSoundLevel"] is null) obj["SimpleSoundLevel"] = 0.25;
-
             File.WriteAllText(path, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
-            return "CapFrameX configured automatically: F11 capture key · unlimited capture (0 s) · voice start/stop sounds.";
+            return bundled
+                ? "Bundled CapFrameX portable mode verified: F11 · unlimited capture (0 s) · Portable/Captures."
+                : "Linked CapFrameX configured: F11 · unlimited capture (0 s).";
         }
         catch (Exception ex)
         {

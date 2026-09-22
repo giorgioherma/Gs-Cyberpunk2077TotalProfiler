@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.11 — native Windows controller
+## v0.2.12 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -121,3 +121,10 @@ CapFrameX upstream defaults capture time to 20 seconds. TOTAL Profiler overrides
 - start/stop sound level: 25%
 
 The bundled portable AppSettings are seeded at build time, and **INSTALL PROFILERS** also reapplies these settings with a backup of an existing AppSettings file. Users therefore do not need to manually change the CapFrameX 20-second capture default.
+
+
+## v0.2.12 CapFrameX portable-mode fix
+
+The bundled CapFrameX now receives a real `portable.json` beside `CapFrameX.exe`. This is the switch CapFrameX 1.9.0 actually uses to enter portable mode; merely creating `Portable\Config` and `Portable\Captures` is not enough.
+
+TOTAL Profiler now seeds/updates only `CaptureHotKey=F11`, `CaptureTime=0`, and `CaptureDelay=0`. CapFrameX keeps ownership of all other UI, sound, sensor, and capture settings. This avoids rewriting unrelated AppSettings fields and keeps the Capture page on upstream defaults.
