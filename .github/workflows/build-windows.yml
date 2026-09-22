@@ -1,4 +1,4 @@
-name: Build TOTAL Profiler Windows EXE
+name: Build TOTAL Profiler Windows App
 
 on:
   workflow_dispatch:
@@ -22,33 +22,54 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install PyInstaller
-        run: python -m pip install --upgrade pyinstaller
+      - name: Install pinned PyInstaller
+        run: python -m pip install "pyinstaller==6.22.3"
 
       - name: Syntax check
         run: |
           python -m py_compile total_profiler.py
           python -m py_compile components\correlator\GRSP_Correlator.py
 
-      - name: Build one-file Windows executable
+      - name: Build one-folder Windows application
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed `
+          pyinstaller --noconfirm --clean --onedir --windowed --noupx `
             --name "Gs-Cyberpunk2077-TOTAL-Profiler" `
             --add-data "components;components" `
             total_profiler.py
 
-      - name: Stage package
+      - name: Stage transparent portable package
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path stage | Out-Null
-          Copy-Item dist\Gs-Cyberpunk2077-TOTAL-Profiler.exe stage\Gs-Cyberpunk2077-TOTAL-Profiler.exe
-          Copy-Item README.md stage\README.md
-          Copy-Item VERSION.txt stage\VERSION.txt
-          Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
+          $dest = "stage\Gs-Cyberpunk2077-TOTAL-Profiler"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item "dist\Gs-Cyberpunk2077-TOTAL-Profiler\*" $dest -Recurse
+          Copy-Item README.md $dest\README.md
+          Copy-Item VERSION.txt $dest\VERSION.txt
+          Copy-Item THIRD_PARTY_NOTICE.txt $dest\THIRD_PARTY_NOTICE.txt
+
+          @(
+            "G's Cyberpunk 2077 TOTAL Profiler"
+            "Version: 0.1.1"
+            "Git commit: $env:GITHUB_SHA"
+            "Python: 3.12"
+            "PyInstaller: 6.22.3"
+            "Build type: onedir / windowed / no UPX"
+          ) | Set-Content -Encoding UTF8 "$dest\BUILD_INFO.txt"
+
+          Push-Location $dest
+          Get-ChildItem -File -Recurse |
+            Where-Object { $_.Name -ne "SHA256SUMS.txt" } |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = [IO.Path]::GetRelativePath((Get-Location).Path, $_.FullName)
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+              "$hash  $relative"
+            } | Set-Content -Encoding ASCII "SHA256SUMS.txt"
+          Pop-Location
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Gs-Cyberpunk2077-TOTAL-Profiler-0.1.0-Windows-x64
-          path: stage
+          name: Gs-Cyberpunk2077-TOTAL-Profiler-0.1.1-Windows-x64-PORTABLE
+          path: stage/Gs-Cyberpunk2077-TOTAL-Profiler
