@@ -64,7 +64,7 @@ internal sealed class MainForm : Form
         setupGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
         AddPathRow(setupGrid, 0, "Cyberpunk 2077 directory", gameBox, BrowseGame);
         AddPathRow(setupGrid, 1, "CapFrameX.exe (bundled / existing)", capExeBox, BrowseCapExe, "Launch", LaunchCapX);
-        AddPathRow(setupGrid, 2, "CapFrameX results", capResultsBox, BrowseCapResults);
+        AddPathRow(setupGrid, 2, "CapFrameX results", capResultsBox, BrowseCapResults, "Reset", ResetCapFrameXResults);
         AddPathRow(setupGrid, 3, "TOTAL Profiler results", resultsBox, BrowseResults, "Open", () => ProfilerServices.OpenPath(resultsBox.Text));
         var settings = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Padding = new Padding(0, 7, 0, 0) };
         settings.Controls.Add(new Label { Text = "Shared profiling key:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
@@ -79,15 +79,29 @@ internal sealed class MainForm : Form
         useBundledCapX.Click += (_, _) => UseBundledCapFrameX();
         settings.Controls.Add(useBundledCapX);
 
+        var resetTotalResults = new Button { Text = "Reset TOTAL results", AutoSize = true, Height = 27, Margin = new Padding(8, 0, 0, 0) };
+        resetTotalResults.Click += (_, _) => ResetTotalResults();
+        settings.Controls.Add(resetTotalResults);
+
         setupGrid.Controls.Add(settings, 0, 4); setupGrid.SetColumnSpan(settings, 4);
 
         var capRuntimeNote = new Label
         {
             AutoSize = true,
             MaximumSize = new Size(1060, 0),
-            Text = $"Bundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion} official portable release — requires .NET 9 Desktop Runtime. CapFrameX 1.9+ requires .NET 10 Desktop Runtime. TOTAL Profiler reads bundled CapFrameX results from Documents\\CapFrameX\\Captures. Browse may link any compatible existing version."
+            Text = $"Bundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion} official portable release — requires .NET 9 Desktop Runtime. CapFrameX 1.9+ requires .NET 10 Desktop Runtime. Bundled captures: .\\Tools\\CapFrameX\\Portable\\Captures. Browse may link any compatible existing version."
         };
         setupGrid.Controls.Add(capRuntimeNote, 0, 5); setupGrid.SetColumnSpan(capRuntimeNote, 4);
+
+        var processNote = new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(1060, 0),
+            Font = new Font("Segoe UI Semibold", 9F),
+            Text = "CapFrameX Running processes: Cyberpunk 2077 should be the only listed app while profiling. If another process appears, move it to the CapFrameX ignore list."
+        };
+        setupGrid.RowCount = 7;
+        setupGrid.Controls.Add(processNote, 0, 6); setupGrid.SetColumnSpan(processNote, 4);
 
         setup.Controls.Add(setupGrid); outer.Controls.Add(setup);
 
@@ -174,7 +188,32 @@ internal sealed class MainForm : Form
         SaveConfig();
         _ = RefreshStatusAsync();
     }
-    private void BrowseCapResults() { using var d = new FolderBrowserDialog { Description = "Select CapFrameX capture/results folder", SelectedPath = capResultsBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { capResultsBox.Text = d.SelectedPath; SaveConfig(); } }
+    private void ResetCapFrameXResults()
+    {
+        var target = cfg.UseBundledCapFrameX
+            ? ProfilerServices.BundledCapFrameXResults
+            : ProfilerServices.DetectCapFrameXPath(capExeBox.Text).Captures;
+
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            MessageBox.Show(this, "Could not determine the CapFrameX capture folder automatically. Use Browse instead.", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        capResultsBox.Text = target;
+        Directory.CreateDirectory(target);
+        SaveConfig();
+        _ = RefreshStatusAsync();
+    }
+
+    private void ResetTotalResults()
+    {
+        resultsBox.Text = ProfilerServices.DefaultResultsDirectory;
+        Directory.CreateDirectory(resultsBox.Text);
+        SaveConfig();
+    }
+
+    private void BrowseCapResults() { using var d = new FolderBrowserDialog { Description = "Select CapFrameX capture/results folder", SelectedPath = capResultsBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { capResultsBox.Text = d.SelectedPath; SaveConfig(); _ = RefreshStatusAsync(); } }
     private void BrowseResults() { using var d = new FolderBrowserDialog { Description = "Select TOTAL Profiler results folder", SelectedPath = resultsBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { resultsBox.Text = d.SelectedPath; SaveConfig(); } }
     private void LaunchCapX() { if (File.Exists(capExeBox.Text)) Process.Start(new ProcessStartInfo(capExeBox.Text) { UseShellExecute = true }); else MessageBox.Show(this, "Select CapFrameX.exe first.", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information); }
 

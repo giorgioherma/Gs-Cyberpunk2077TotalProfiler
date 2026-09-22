@@ -124,14 +124,14 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
           @(
             "G's Cyberpunk 2077 TOTAL Profiler"
-            'Version: 0.2.7'
+            'Version: 0.2.8'
             "Git commit: $env:GITHUB_SHA"
             'Runtime: .NET 8 self-contained win-x64'
             'Packaging: normal self-contained .NET files; NOT PyInstaller; NOT self-extracting'
             'Python required: no'
             '.NET installation required for TOTAL Profiler: no'
             'Bundled profiler payload hashes: verified during build'
-            'CapFrameX: official upstream portable v1.8.6 bundled unchanged; TOTAL Profiler defaults its CapFrameX results path to Documents/CapFrameX/Captures; existing compatible versions may be linked instead'
+            'CapFrameX: official upstream portable v1.8.6; bundled capture path Tools/CapFrameX/Portable/Captures; existing compatible versions may be linked instead'
           ) | Set-Content -Encoding UTF8 stage\BUILD_INFO.txt
 
           Push-Location stage
