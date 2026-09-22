@@ -1,6 +1,6 @@
 {
   "name": "G's Cyberpunk 2077 TOTAL Profiler",
-  "version": "0.2.0",
+  "version": "0.2.19",
   "controller": {
     "language": "C#",
     "runtime": ".NET 8",
@@ -13,10 +13,10 @@
     "GRSP": "0.5.0",
     "CET_Runtime_Profiler": "3.0.0-alpha6b",
     "CapFrameX": "external / version not locked",
-    "Correlator": "0.2.0-native"
+    "Correlator": "0.2.1-native"
   },
   "keys": {
     "shared_capture": "F11",
-    "cet_export": "F12"
+    "cet_export": "automatic on shared F11 stop"
   }
 }
