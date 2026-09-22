@@ -432,7 +432,7 @@ internal sealed class MainForm : Form
     {
         var body = PageBody(resultsPage);
 
-        body.Controls.Add(PageHeading("STEP 4 — RESULTS", "Collect the three profiler outputs, compare them, or open the latest result."));
+        body.Controls.Add(PageHeading("STEP 4 — RESULTS", "AV isolation build A: v0.2.19 UI with the v0.2.18 backend. Not a public release."));
 
         var results = Group("Results");
         var rg = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 5 };
@@ -975,15 +975,6 @@ internal sealed class MainForm : Form
         if (!installVerified)
             throw new InvalidOperationException("Installation completed, but one or more verification checks are still failing. Expand Technical log for details.");
 
-        if (cfg.CaptureResetUtc is null)
-        {
-            // First verified install establishes the "nothing before this belongs to this
-            // measurement session" boundary. Existing CapFrameX history is never treated
-            // as disposable uncollected output.
-            cfg.CaptureResetUtc = DateTimeOffset.UtcNow;
-            cfg.Save();
-        }
-
         Log("Installation VERIFIED. Continue to Measurement.");
     });
 
@@ -1132,11 +1123,12 @@ internal sealed class MainForm : Form
     private async Task RestoreAllAsync()
     {
         if (MessageBox.Show(this,
-            "Restore every TOTAL Profiler change in the Cyberpunk 2077 game folder?\r\n\r\n" +
-            "All TOTAL Profiler-managed game files and configuration will be returned to their original state. CapFrameX settings changed by TOTAL Profiler will also be restored.\r\n\r\n" +
-            "Any uncollected GRSP, CET, or current CapFrameX capture data will be discarded. Already-collected Results stay.\r\n\r\n" +
-            "Cyberpunk 2077 must be closed.",
-            ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            "AV ISOLATION BUILD A\r\n\r\n" +
+            "This test build intentionally uses the v0.2.18 restore/install backend.\r\n\r\n" +
+            "Restore everything TOTAL Profiler changed back to its original state?\r\n\r\n" +
+            "This restores CET / managed 0-Engine state, GRSP DLL state, CET binding state and any CapFrameX settings backup.\r\n\r\n" +
+            "Capture/result folders are NOT deleted. Cyberpunk 2077 must be closed.",
+            ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
         await RunBusy(async () =>
@@ -1152,15 +1144,13 @@ internal sealed class MainForm : Form
                 using var status = await ProfilerServices.CallCetAsync("Status", cfg.GameDirectory);
                 if (J(status.RootElement, "managed") == "True")
                 {
-                    using var r = await ProfilerServices.CallCetAsync("Restore", cfg.GameDirectory, discardLiveOnRestore: true);
-                    var discarded = J(r.RootElement, "discardedLiveResultCount");
-                    notes.Add("CET / 0-Engine: original files restored; live uncollected CET CSVs discarded" +
-                              (string.IsNullOrWhiteSpace(discarded) ? "." : $" ({discarded})."));
+                    var outDir = Path.Combine(cfg.ResultsDirectory, "CET_Restore_Archive");
+                    Directory.CreateDirectory(outDir);
+                    using var r = await ProfilerServices.CallCetAsync("Restore", cfg.GameDirectory, outDir);
+                    var archived = J(r.RootElement, "archived");
+                    notes.Add("CET / 0-Engine: restored" + (string.IsNullOrWhiteSpace(archived) ? "." : $" · final CET results archived to {archived}"));
                 }
-                else
-                {
-                    notes.Add("CET / 0-Engine: no TOTAL Profiler managed state was present.");
-                }
+                else notes.Add("CET / 0-Engine: no TOTAL Profiler managed state was present.");
             }
             catch (Exception ex)
             {
@@ -1190,55 +1180,19 @@ internal sealed class MainForm : Form
 
             try
             {
-                int discardedCapX = 0;
-                var boundary = cfg.CaptureResetUtc?.UtcDateTime;
-                if (boundary is not null && Directory.Exists(cfg.CapFrameXResults))
-                {
-                    var uncollected = Directory.EnumerateFiles(cfg.CapFrameXResults, "*.json", SearchOption.AllDirectories)
-                        .Where(path => File.GetLastWriteTimeUtc(path) >= boundary.Value)
-                        .Where(path => ProfilerServices.CapXDurationMs(path) is not null)
-                        .ToList();
-
-                    foreach (var path in uncollected)
-                    {
-                        File.Delete(path);
-                        discardedCapX++;
-                    }
-                }
-
-                notes.Add(discardedCapX > 0
-                    ? $"CapFrameX: discarded {discardedCapX} uncollected capture file(s)."
-                    : "CapFrameX: no uncollected capture to discard.");
+                notes.Add("CapFrameX: " + await Task.Run(() => ProfilerServices.RestoreCapFrameXConfigBestEffort(cfg.CapFrameXExe)));
             }
             catch (Exception ex)
             {
                 failed = true;
-                notes.Add("CapFrameX capture cleanup: FAILED · " + ex.Message);
+                notes.Add("CapFrameX: RESTORE FAILED · " + ex.Message);
             }
-
-            try
-            {
-                notes.Add("CapFrameX settings: " + await Task.Run(() => ProfilerServices.RestoreCapFrameXConfigBestEffort(cfg.CapFrameXExe)));
-            }
-            catch (Exception ex)
-            {
-                failed = true;
-                notes.Add("CapFrameX settings: RESTORE FAILED · " + ex.Message);
-            }
-
-            cfg.CaptureResetUtc = DateTimeOffset.UtcNow;
-            cfg.Save();
 
             foreach (var note in notes) Log(note);
             await RefreshStatusAsync();
 
-            MessageBox.Show(this,
-                string.Join("\r\n\r\n", notes) +
-                (failed ? "\r\n\r\nOne or more restore steps failed. The app kept the remaining restore state so the operation can be retried safely." :
-                          "\r\n\r\nGame files are back to the managed pre-profiler state."),
-                ProfilerServices.AppName,
-                MessageBoxButtons.OK,
-                failed ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            MessageBox.Show(this, string.Join("\r\n\r\n", notes), ProfilerServices.AppName,
+                MessageBoxButtons.OK, failed ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
         });
     }
 
