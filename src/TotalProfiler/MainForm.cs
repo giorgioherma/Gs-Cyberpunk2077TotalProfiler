@@ -1,0 +1,258 @@
+using System.Diagnostics;
+using System.Text.Json;
+
+namespace GsCyberpunkTotalProfiler;
+
+internal sealed class MainForm : Form
+{
+    private readonly AppConfig cfg;
+    private readonly TextBox gameBox = new();
+    private readonly TextBox capExeBox = new();
+    private readonly TextBox capResultsBox = new();
+    private readonly TextBox resultsBox = new();
+    private readonly TextBox scenarioBox = new();
+    private readonly CheckBox coreOnly = new();
+    private readonly Label gameStatus = new();
+    private readonly Label grspStatus = new();
+    private readonly Label cetStatus = new();
+    private readonly Label zeroStatus = new();
+    private readonly Label capStatus = new();
+    private readonly TextBox logBox = new();
+    private readonly Button installButton = new();
+    private readonly Button collectButton = new();
+    private readonly Button compareButton = new();
+    private bool busy;
+
+    public MainForm()
+    {
+        cfg = AppConfig.Load();
+        Text = ProfilerServices.AppName;
+        Width = 1160;
+        Height = 780;
+        MinimumSize = new Size(980, 680);
+        StartPosition = FormStartPosition.CenterScreen;
+        Font = new Font("Segoe UI", 9F);
+        BuildUi();
+        LoadConfigIntoUi();
+        Shown += async (_, _) => await RefreshStatusAsync();
+        FormClosing += (_, _) => SaveConfig();
+    }
+
+    private void BuildUi()
+    {
+        var outer = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 7, AutoScroll = true };
+        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Controls.Add(outer);
+
+        var titlePanel = new Panel { Dock = DockStyle.Fill, Height = 62 };
+        var title = new Label { Text = ProfilerServices.AppName, Font = new Font("Segoe UI Semibold", 18F), AutoSize = true, Location = new Point(0, 0) };
+        var sub = new Label { Text = $"GRSP {ProfilerServices.GrspVersion} + CET Runtime Profiler {ProfilerServices.CetVersion} + external CapFrameX + native correlator {ProfilerServices.CorrelatorVersion}", AutoSize = true, Location = new Point(2, 37) };
+        titlePanel.Controls.Add(title); titlePanel.Controls.Add(sub); outer.Controls.Add(titlePanel);
+
+        var setup = Group("Setup");
+        var setupGrid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 5, AutoSize = true };
+        setupGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+        setupGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        setupGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        setupGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        AddPathRow(setupGrid, 0, "Cyberpunk 2077 directory", gameBox, BrowseGame);
+        AddPathRow(setupGrid, 1, "CapFrameX.exe", capExeBox, BrowseCapExe, "Launch", LaunchCapX);
+        AddPathRow(setupGrid, 2, "CapFrameX results", capResultsBox, BrowseCapResults);
+        AddPathRow(setupGrid, 3, "TOTAL Profiler results", resultsBox, BrowseResults, "Open", () => ProfilerServices.OpenPath(resultsBox.Text));
+        var settings = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Padding = new Padding(0, 7, 0, 0) };
+        settings.Controls.Add(new Label { Text = "Shared profiling key:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
+        settings.Controls.Add(new Label { Text = ProfilerServices.CaptureKey, AutoSize = true, Font = new Font("Segoe UI Semibold", 9F), Margin = new Padding(0, 6, 20, 0) });
+        settings.Controls.Add(new Label { Text = "CET result export key:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
+        settings.Controls.Add(new Label { Text = ProfilerServices.CetExportKey, AutoSize = true, Font = new Font("Segoe UI Semibold", 9F), Margin = new Padding(0, 6, 20, 0) });
+        settings.Controls.Add(new Label { Text = "Scenario:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
+        scenarioBox.Width = 155; settings.Controls.Add(scenarioBox);
+        coreOnly.Text = "CET core profiler only — leave 0-Engine untouched"; coreOnly.AutoSize = true; coreOnly.Margin = new Padding(20, 3, 0, 0); settings.Controls.Add(coreOnly);
+        setupGrid.Controls.Add(settings, 0, 4); setupGrid.SetColumnSpan(settings, 4);
+        setup.Controls.Add(setupGrid); outer.Controls.Add(setup);
+
+        var status = Group("Profiler status");
+        var sg = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 6, AutoSize = true };
+        sg.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170)); sg.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); sg.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        AddStatusRow(sg, 0, "Game", gameStatus); AddStatusRow(sg, 1, "GRSP", grspStatus); AddStatusRow(sg, 2, "CET profiler", cetStatus); AddStatusRow(sg, 3, "0-Engine / Scheduler", zeroStatus); AddStatusRow(sg, 4, "CapFrameX", capStatus); AddStatusRow(sg, 5, "Capture keys", new Label { AutoSize = true, Text = "F11 shared capture · F12 CET export" });
+        var refresh = new Button { Text = "Refresh status", Width = 105, Height = 28, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        refresh.Click += async (_, _) => await RefreshStatusAsync(); sg.Controls.Add(refresh, 2, 0); sg.SetRowSpan(refresh, 2);
+        status.Controls.Add(sg); outer.Controls.Add(status);
+
+        var actions = Group("Actions");
+        var af = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
+        installButton.Text = "INSTALL PROFILERS"; installButton.Width = 160; installButton.Height = 34; installButton.Click += async (_, _) => await InstallAsync();
+        collectButton.Text = "COLLECT RESULTS"; collectButton.Width = 155; collectButton.Height = 34; collectButton.Click += async (_, _) => await CollectAsync();
+        compareButton.Text = "COMPARE RESULTS"; compareButton.Width = 155; compareButton.Height = 34; compareButton.Click += async (_, _) => await CompareAsync();
+        var openLatest = new Button { Text = "Open latest", Width = 115, Height = 34 }; openLatest.Click += (_, _) => OpenLatest();
+        var restoreCet = new Button { Text = "Restore CET", Width = 115, Height = 34 }; restoreCet.Click += async (_, _) => await RestoreCetAsync();
+        var restoreGrsp = new Button { Text = "Restore GRSP DLL", Width = 135, Height = 34 }; restoreGrsp.Click += async (_, _) => await RestoreGrspAsync();
+        af.Controls.AddRange([installButton, collectButton, compareButton, openLatest, restoreCet, restoreGrsp]); actions.Controls.Add(af); outer.Controls.Add(actions);
+
+        var workflow = Group("Capture workflow");
+        var wf = new Label { AutoSize = true, MaximumSize = new Size(1060, 0), Text = "1) Launch CapFrameX and Cyberpunk 2077.   2) F11 starts GRSP + CET + CapFrameX.   3) F11 stops all three.   4) F12 exports CET CSVs.   5) Close the game.   6) COLLECT RESULTS.   7) COMPARE RESULTS.\r\n\r\nCET note: after first profiler install, bind 'Profiler: START / PAUSE / RESUME' to F11 and 'Profiler: CREATE CSV' to F12 in CET > Bindings." };
+        workflow.Controls.Add(wf); outer.Controls.Add(workflow);
+
+        var logGroup = Group("Log");
+        logBox.Dock = DockStyle.Fill; logBox.Multiline = true; logBox.ReadOnly = true; logBox.ScrollBars = ScrollBars.Vertical; logBox.Font = new Font("Consolas", 9F); logBox.BackColor = SystemColors.Window;
+        logGroup.Controls.Add(logBox); outer.Controls.Add(logGroup);
+
+        var footer = new Label { AutoSize = true, Text = "Native .NET self-contained Windows build. CapFrameX is linked externally and is not version-locked.", ForeColor = SystemColors.GrayText };
+        outer.Controls.Add(footer);
+    }
+
+    private static GroupBox Group(string text) => new() { Text = text, Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(10), Margin = new Padding(0, 5, 0, 5) };
+
+    private static void AddStatusRow(TableLayoutPanel p, int row, string name, Label value)
+    {
+        p.Controls.Add(new Label { Text = name + ":", AutoSize = true, Margin = new Padding(0, 4, 0, 4) }, 0, row);
+        value.AutoSize = true; value.Margin = new Padding(0, 4, 0, 4); p.Controls.Add(value, 1, row);
+    }
+
+    private static void AddPathRow(TableLayoutPanel p, int row, string label, TextBox box, Action browse, string? extraText = null, Action? extra = null)
+    {
+        p.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 7, 0, 0) }, 0, row);
+        box.Dock = DockStyle.Fill; p.Controls.Add(box, 1, row);
+        var b = new Button { Text = "Browse...", Dock = DockStyle.Fill, Height = 27 }; b.Click += (_, _) => browse(); p.Controls.Add(b, 2, row);
+        if (extraText is not null && extra is not null) { var e = new Button { Text = extraText, Dock = DockStyle.Fill, Height = 27 }; e.Click += (_, _) => extra(); p.Controls.Add(e, 3, row); }
+    }
+
+    private void LoadConfigIntoUi()
+    {
+        gameBox.Text = cfg.GameDirectory; capExeBox.Text = cfg.CapFrameXExe; capResultsBox.Text = cfg.CapFrameXResults; resultsBox.Text = cfg.ResultsDirectory; scenarioBox.Text = cfg.Scenario; coreOnly.Checked = cfg.CetCoreOnly;
+    }
+    private void SaveConfig()
+    {
+        cfg.GameDirectory = gameBox.Text.Trim(); cfg.CapFrameXExe = capExeBox.Text.Trim(); cfg.CapFrameXResults = capResultsBox.Text.Trim(); cfg.ResultsDirectory = resultsBox.Text.Trim(); cfg.Scenario = scenarioBox.Text.Trim(); cfg.CetCoreOnly = coreOnly.Checked; cfg.Save();
+    }
+
+    private void BrowseGame() { using var d = new FolderBrowserDialog { Description = "Select Cyberpunk 2077 game directory", SelectedPath = gameBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { gameBox.Text = d.SelectedPath; SaveConfig(); _ = RefreshStatusAsync(); } }
+    private void BrowseCapExe() { using var d = new OpenFileDialog { Title = "Select CapFrameX.exe", Filter = "CapFrameX|CapFrameX.exe|Executable|*.exe|All files|*.*", FileName = "CapFrameX.exe" }; if (d.ShowDialog(this) == DialogResult.OK) { capExeBox.Text = d.FileName; var detected = ProfilerServices.DetectCapFrameXPath(d.FileName).Captures; if (!string.IsNullOrWhiteSpace(detected)) capResultsBox.Text = detected; SaveConfig(); _ = RefreshStatusAsync(); } }
+    private void BrowseCapResults() { using var d = new FolderBrowserDialog { Description = "Select CapFrameX capture/results folder", SelectedPath = capResultsBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { capResultsBox.Text = d.SelectedPath; SaveConfig(); } }
+    private void BrowseResults() { using var d = new FolderBrowserDialog { Description = "Select TOTAL Profiler results folder", SelectedPath = resultsBox.Text }; if (d.ShowDialog(this) == DialogResult.OK) { resultsBox.Text = d.SelectedPath; SaveConfig(); } }
+    private void LaunchCapX() { if (File.Exists(capExeBox.Text)) Process.Start(new ProcessStartInfo(capExeBox.Text) { UseShellExecute = true }); else MessageBox.Show(this, "Select CapFrameX.exe first.", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information); }
+
+    private void Log(string msg)
+    {
+        if (InvokeRequired) { BeginInvoke(() => Log(msg)); return; }
+        logBox.AppendText($"[{DateTime.Now:HH:mm:ss}] {msg}{Environment.NewLine}");
+    }
+    private void SetBusy(bool value)
+    {
+        busy = value; installButton.Enabled = !value; collectButton.Enabled = !value; compareButton.Enabled = !value; Cursor = value ? Cursors.WaitCursor : Cursors.Default;
+    }
+    private async Task RunBusy(Func<Task> action)
+    {
+        if (busy) return; SetBusy(true);
+        try { SaveConfig(); await action(); }
+        catch (Exception ex) { Log("ERROR: " + ex); MessageBox.Show(this, ex.Message, ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        finally { SetBusy(false); }
+    }
+
+    private async Task RefreshStatusAsync()
+    {
+        SaveConfig();
+        try
+        {
+            var snap = AppConfig.Load();
+            var data = await Task.Run(async () =>
+            {
+                var v = ProfilerServices.ValidateGameRoot(snap.GameDirectory);
+                string grsp = "NOT INSTALLED", cet = "NOT AVAILABLE", zero = "-";
+                if (v.Ok)
+                {
+                    var dll = Path.Combine(snap.GameDirectory, "red4ext", "plugins", "redscript_profiler_alpha.dll");
+                    if (File.Exists(dll)) { var h = ProfilerServices.Sha256(dll); grsp = string.Equals(h, ProfilerServices.GrspDllSha256, StringComparison.OrdinalIgnoreCase) ? "INSTALLED ✓" : $"OTHER BUILD ({h[..Math.Min(10,h.Length)]}…)"; }
+                    try
+                    {
+                        using var s = await ProfilerServices.CallCetAsync("Status", snap.GameDirectory);
+                        var r = s.RootElement;
+                        cet = $"{J(r,"cet")} · manager {J(r,"packageVersion")} · live CSVs {J(r,"liveResultCount")}";
+                        zero = J(r,"zeroEnginePresent") == "True" ? $"{J(r,"zeroEngineInit")} · {J(r,"scheduler")}{(string.IsNullOrWhiteSpace(J(r,"managedMode"))?"":" · managed mode "+J(r,"managedMode"))}" : "Not found — core CET profiling only";
+                    }
+                    catch (Exception ex) { cet = "STATUS ERROR: " + ex.Message.Split('\n').Last(); }
+                }
+                string cap = "Select CapFrameX.exe";
+                if (File.Exists(snap.CapFrameXExe)) cap = "LINKED ✓" + (Directory.Exists(snap.CapFrameXResults) ? " · results FOUND ✓" : " · results NOT FOUND");
+                return (v, grsp, cet, zero, cap);
+            });
+            gameStatus.Text = (data.v.Ok ? "FOUND ✓ · " : "NOT FOUND · ") + data.v.Message; grspStatus.Text = data.grsp; cetStatus.Text = data.cet; zeroStatus.Text = data.zero; capStatus.Text = data.cap;
+        }
+        catch (Exception ex) { Log("Status error: " + ex.Message); }
+    }
+
+    private async Task InstallAsync() => await RunBusy(async () =>
+    {
+        if (ProfilerServices.IsGameRunning()) throw new InvalidOperationException("Cyberpunk 2077 is running. Close it before installation.");
+        Log("Installing GRSP 0.5.0...");
+        var gr = await Task.Run(() => ProfilerServices.InstallGrsp(cfg.GameDirectory, cfg.Scenario));
+        Log($"GRSP: {gr.Mode} -> {gr.Dll}");
+        Log($"Installing CET Runtime Profiler {ProfilerServices.CetVersion}...");
+        using var cet = await ProfilerServices.CallCetAsync("Install", cfg.GameDirectory, cfg.ResultsDirectory, cfg.CetCoreOnly);
+        Log($"CET: {J(cet.RootElement,"cet")} · 0-Engine mode: {J(cet.RootElement,"managedMode")}");
+        if (File.Exists(cfg.CapFrameXExe)) Log(await Task.Run(() => ProfilerServices.ConfigureCapFrameXF11BestEffort(cfg.CapFrameXExe)));
+        else Log("CapFrameX is not linked; set its capture hotkey to F11 manually.");
+        await RefreshStatusAsync();
+        MessageBox.Show(this, "Profiler install completed.\r\n\r\nGRSP uses F11 automatically.\r\nCapFrameX should use F11.\r\n\r\nCET requires one binding step in-game:\r\n  Profiler: START / PAUSE / RESUME -> F11\r\n  Profiler: CREATE CSV -> F12", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+    });
+
+    private async Task CollectAsync() => await RunBusy(async () =>
+    {
+        var result = await CaptureCollector.CollectAsync(cfg, Log);
+        cfg.LastCapture = result.CaptureDirectory; cfg.Save(); ProfilerServices.OpenPath(result.CaptureDirectory);
+        var details = $"Collected successfully.\r\n\r\n{result.CaptureDirectory}\r\n\r\nPrecheck: {result.SyncPrecheck}";
+        if (result.StartDeltaMs is not null) details += $"\r\nGRSP↔CET start delta: {result.StartDeltaMs:F3} ms";
+        if (result.DurationDeltaMs is not null) details += $"\r\nDuration delta: {result.DurationDeltaMs:F3} ms";
+        details += "\r\n\r\nClick COMPARE RESULTS to run the native correlator.";
+        MessageBox.Show(this, details, ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        await RefreshStatusAsync();
+    });
+
+    private async Task CompareAsync() => await RunBusy(async () =>
+    {
+        if (string.IsNullOrWhiteSpace(cfg.LastCapture) || !Directory.Exists(cfg.LastCapture)) throw new InvalidOperationException("No collected capture selected. Run COLLECT RESULTS first.");
+        var raw = Path.Combine(cfg.LastCapture, "Raw"); if (!Directory.Exists(raw)) throw new InvalidOperationException("The selected capture has no Raw folder.");
+        var combined = Path.Combine(cfg.LastCapture, "Combined"); if (Directory.Exists(combined)) Directory.Delete(combined, true); Directory.CreateDirectory(combined);
+        Log("Running native .NET correlator...");
+        var result = await Task.Run(() => CorrelatorEngine.Run(raw, combined));
+        Log($"Combined report: {result.Report}");
+        var manifestPath = Path.Combine(cfg.LastCapture, "CaptureManifest.json");
+        Dictionary<string,object?> manifest;
+        try { manifest = JsonSerializer.Deserialize<Dictionary<string,object?>>(File.ReadAllText(manifestPath), ProfilerServices.JsonOpts) ?? []; } catch { manifest = []; }
+        manifest["correlated_local"] = DateTimeOffset.Now.ToString("O"); manifest["combined_report"] = result.Report; manifest["native_correlator_sync_quality"] = result.SyncQuality; manifest["native_correlator_frametime_correlation"] = result.Correlation; manifest["native_correlator_frame_offset"] = result.FrameOffset;
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, ProfilerServices.JsonOpts) + Environment.NewLine);
+        var fullZip = Path.Combine(Path.GetDirectoryName(cfg.LastCapture)!, Path.GetFileName(cfg.LastCapture) + "_FULL.zip");
+        await Task.Run(() => ProfilerServices.CreateDirectoryZip(cfg.LastCapture, fullZip));
+        Log($"Portable full package: {fullZip}");
+        ProfilerServices.OpenPath(result.Report); ProfilerServices.OpenPath(combined);
+        MessageBox.Show(this, $"Correlation complete.\r\n\r\nReport:\r\n{result.Report}\r\n\r\nFull shareable capture package:\r\n{fullZip}", ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+    });
+
+    private async Task RestoreCetAsync()
+    {
+        if (MessageBox.Show(this, "Restore the original CET / managed 0-Engine state now?\r\n\r\nCyberpunk 2077 must be closed.", ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        await RunBusy(async () => { var outDir = Path.Combine(cfg.ResultsDirectory, "CET_Restore_Archive"); Directory.CreateDirectory(outDir); using var r = await ProfilerServices.CallCetAsync("Restore", cfg.GameDirectory, outDir); Log("CET restore completed." + (string.IsNullOrWhiteSpace(J(r.RootElement,"archived")) ? "" : " Final CET results: " + J(r.RootElement,"archived"))); await RefreshStatusAsync(); MessageBox.Show(this, "CET managed state restored.", ProfilerServices.AppName); });
+    }
+
+    private async Task RestoreGrspAsync()
+    {
+        if (MessageBox.Show(this, "Restore the GRSP DLL state managed by TOTAL Profiler?\r\n\r\nCapture result folders will NOT be deleted.", ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        await RunBusy(async () => { var msg = await Task.Run(() => ProfilerServices.RestoreGrsp(cfg.GameDirectory)); Log(msg); await RefreshStatusAsync(); MessageBox.Show(this, msg, ProfilerServices.AppName); });
+    }
+
+    private void OpenLatest()
+    {
+        SaveConfig(); if (!string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture)) ProfilerServices.OpenPath(cfg.LastCapture); else if (Directory.Exists(cfg.ResultsDirectory)) { var p = Directory.EnumerateDirectories(cfg.ResultsDirectory,"Capture_*",SearchOption.TopDirectoryOnly).OrderByDescending(Directory.GetLastWriteTimeUtc).FirstOrDefault(); if (p is not null) { cfg.LastCapture = p; cfg.Save(); ProfilerServices.OpenPath(p); } else ProfilerServices.OpenPath(cfg.ResultsDirectory); }
+    }
+
+    private static string J(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var x)) return "";
+        return x.ValueKind switch { JsonValueKind.String => x.GetString() ?? "", JsonValueKind.True => "True", JsonValueKind.False => "False", JsonValueKind.Number => x.ToString(), _ => x.ToString() };
+    }
+}
