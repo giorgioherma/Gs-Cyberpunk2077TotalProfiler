@@ -33,13 +33,20 @@ internal sealed class AppConfig
             if (!File.Exists(ConfigPath)) return new AppConfig();
             var cfg = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(ConfigPath), JsonOptions) ?? new AppConfig();
 
-            // v0.2.2 migration: only move the old untouched default. A user-selected
-            // custom results directory is preserved exactly.
+            // Legacy migration. Early builds could accidentally persist the
+            // CapFrameX capture folder as TOTAL Profiler's results folder.
+            // Move only those known legacy defaults to a dedicated Results folder
+            // beside this TOTAL Profiler executable.
+            var newDefault = Path.Combine(AppContext.BaseDirectory, "Results");
             var oldDefault = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "G-Cyberpunk2077-TOTAL-Profiler", "Results");
+            var sameAsCapFrameX = !string.IsNullOrWhiteSpace(cfg.CapFrameXResults) &&
+                                  !string.IsNullOrWhiteSpace(cfg.ResultsDirectory) &&
+                                  string.Equals(Path.GetFullPath(cfg.ResultsDirectory), Path.GetFullPath(cfg.CapFrameXResults), StringComparison.OrdinalIgnoreCase);
             if (string.IsNullOrWhiteSpace(cfg.ResultsDirectory) ||
-                string.Equals(Path.GetFullPath(cfg.ResultsDirectory), Path.GetFullPath(oldDefault), StringComparison.OrdinalIgnoreCase))
+                string.Equals(Path.GetFullPath(cfg.ResultsDirectory), Path.GetFullPath(oldDefault), StringComparison.OrdinalIgnoreCase) ||
+                sameAsCapFrameX)
             {
-                cfg.ResultsDirectory = Path.Combine(AppContext.BaseDirectory, "Results");
+                cfg.ResultsDirectory = newDefault;
             }
             return cfg;
         }

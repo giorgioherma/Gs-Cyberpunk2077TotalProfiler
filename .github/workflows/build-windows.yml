@@ -152,5 +152,5 @@ jobs:
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Gs-Cyberpunk2077-TOTAL-Profiler-0.2.2-NATIVE-Windows-x64
+          name: Gs-Cyberpunk2077-TOTAL-Profiler-0.2.3-NATIVE-Windows-x64
           path: stage
