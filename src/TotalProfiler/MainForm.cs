@@ -296,7 +296,7 @@ internal sealed class MainForm : Form
         installActions.Controls.Add(refresh);
         body.Controls.Add(installActions);
 
-        var logToggle = new Button { Text = "Technical log ▼"        var logToggle = new Button { Text = "Technical log ▼", AutoSize = true, Height = 30, Margin = new Padding(0, 5, 0, 3) };
+        var logToggle = new Button { Text = "Technical log ▼", AutoSize = true, Height = 30, Margin = new Padding(0, 5, 0, 3) };
         logToggle.Click += (_, _) =>
         {
             technicalLog.Visible = !technicalLog.Visible;
@@ -509,7 +509,7 @@ internal sealed class MainForm : Form
         body.Controls.Add(nav);
     }
 
-    private static Control PageHeading    private static Control PageHeading(string title, string description)
+    private static Control PageHeading(string title, string description)
     {
         var p = new Panel { Dock = DockStyle.Fill, Height = 68, Margin = new Padding(0, 0, 0, 8) };
         var h = new Label { Text = title, Font = new Font("Segoe UI Semibold", 15F), AutoSize = true, Location = new Point(0, 0) };
@@ -599,7 +599,7 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void LoadConfigIntoUi()    private void LoadConfigIntoUi()
+    private void LoadConfigIntoUi()
     {
         if (cfg.UseBundledCapFrameX && File.Exists(ProfilerServices.BundledCapFrameXExe))
         {
