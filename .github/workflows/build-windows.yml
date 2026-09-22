@@ -1,1 +1,54 @@
+name: Build TOTAL Profiler Windows EXE
 
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'total_profiler.py'
+      - 'components/**'
+      - 'README.md'
+      - 'VERSION.txt'
+      - '.github/workflows/build-windows.yml'
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pyinstaller
+
+      - name: Syntax check
+        run: |
+          python -m py_compile total_profiler.py
+          python -m py_compile components\correlator\GRSP_Correlator.py
+
+      - name: Build one-file Windows executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed `
+            --name "Gs-Cyberpunk2077-TOTAL-Profiler" `
+            --add-data "components;components" `
+            total_profiler.py
+
+      - name: Stage package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path stage | Out-Null
+          Copy-Item dist\Gs-Cyberpunk2077-TOTAL-Profiler.exe stage\Gs-Cyberpunk2077-TOTAL-Profiler.exe
+          Copy-Item README.md stage\README.md
+          Copy-Item VERSION.txt stage\VERSION.txt
+          Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gs-Cyberpunk2077-TOTAL-Profiler-0.1.0-Windows-x64
+          path: stage
