@@ -7,9 +7,9 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Gs-Cyberpunk2077-TOTAL-Profiler</AssemblyName>
     <RootNamespace>GsCyberpunkTotalProfiler</RootNamespace>
-    <Version>0.2.15</Version>
-    <AssemblyVersion>0.2.15.0</AssemblyVersion>
-    <FileVersion>0.2.15.0</FileVersion>
+    <Version>0.2.16</Version>
+    <AssemblyVersion>0.2.16.0</AssemblyVersion>
+    <FileVersion>0.2.16.0</FileVersion>
     <PublishSingleFile>false</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

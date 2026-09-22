@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.15 — native Windows controller
+## v0.2.16 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -148,3 +148,18 @@ TOTAL Profiler now seeds/updates only `CaptureHotKey=F11`, `CaptureTime=0`, and 
 - PresentMon capture logic, F11, unlimited capture, portable mode and capture JSON format are unchanged.
 - The native correlator HTML again includes the **Combined timeline** graph. The graph disappeared when the Python correlator was replaced by the native C# correlator: the initial C# \`BuildHtml\` implementation ported the summary/tables but not the old canvas chart.
 - The restored self-contained graph plots CapFrameX max frametime, GRSP observed REDscript exclusive work and CET observed exclusive work.
+
+
+## v0.2.16 CapFrameX rollback
+
+The v0.2.15 build-time CapFrameX IL hotfix is removed completely. It caused the bundled CapFrameX navigation region to stop activating all tabs on some launches.
+
+v0.2.16 restores the exact CapFrameX integration used before that experiment:
+- official hash-verified CapFrameX 1.9.0 portable release
+- no modified CapFrameX binaries
+- portable.json + Portable/Config/Captures layout
+- F11 capture hotkey
+- unlimited CaptureTime=0
+- CaptureDelay=0
+
+The v0.2.15 native correlator HTML timeline graph is retained.
