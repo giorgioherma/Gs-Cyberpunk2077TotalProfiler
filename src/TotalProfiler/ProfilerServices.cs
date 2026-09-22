@@ -9,7 +9,7 @@ namespace GsCyberpunkTotalProfiler;
 internal static class ProfilerServices
 {
     public const string AppName = "G's Cyberpunk 2077 TOTAL Profiler";
-    public const string Version = "0.2.6";
+    public const string Version = "0.2.7";
     public const string GrspVersion = "0.5.0";
     public const string CetVersion = "3.0.0-alpha6b";
     public const string CorrelatorVersion = "0.2.0-native";
@@ -20,6 +20,7 @@ internal static class ProfilerServices
 
     public static string ComponentsDirectory => Path.Combine(AppContext.BaseDirectory, "components");
     public static string BundledCapFrameXExe => Path.Combine(AppContext.BaseDirectory, "Tools", "CapFrameX", "CapFrameX.exe");
+    public static string BundledCapFrameXResults => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CapFrameX", "Captures");
 
     public static bool IsGameRunning()
     {

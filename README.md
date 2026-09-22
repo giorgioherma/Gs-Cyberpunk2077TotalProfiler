@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.6 — native Windows controller
+## v0.2.7 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -66,18 +66,13 @@ TOTAL Profiler does **not** version-lock CapFrameX. The bundled 1.8.6 copy is se
 CapFrameX remains a third-party project and is credited to its upstream authors.
 
 
-## Bundled CapFrameX portable defaults
+## Bundled CapFrameX results default
 
-For the bundled CapFrameX 1.8.6 copy, TOTAL Profiler supplies the standard portable layout explicitly:
+TOTAL Profiler does not modify the bundled CapFrameX configuration or process ignore list. For the bundled CapFrameX copy, TOTAL Profiler defaults its **CapFrameX results** field to:
 
-- captures: `Tools\CapFrameX\Portable\Captures`
-- config: `Tools\CapFrameX\Portable\Config`
-- logs: `Tools\CapFrameX\Portable\Logs`
+`Documents\CapFrameX\Captures`
 
-The capture directory is created in the artifact and is considered valid while empty; it does not need a JSON capture until results are actually collected.
-
-The bundled portable process list starts with `dwm` (Windows Desktop Window Manager) ignored. This keeps the CapFrameX running-process list clear before Cyberpunk starts, while users remain free to edit the CapFrameX ignore list themselves.
-
+The directory is created if needed and is valid while empty. A capture file is only required when **COLLECT RESULTS** is run.
 
 ## Package folder name
 

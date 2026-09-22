@@ -85,7 +85,7 @@ internal sealed class MainForm : Form
         {
             AutoSize = true,
             MaximumSize = new Size(1060, 0),
-            Text = $"Bundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion} official portable release — requires .NET 9 Desktop Runtime. CapFrameX 1.9+ requires .NET 10 Desktop Runtime. Portable captures default to .\\Portable\\Captures; DWM is ignored by default. Browse may link any compatible existing version."
+            Text = $"Bundled default: CapFrameX {ProfilerServices.BundledCapFrameXVersion} official portable release — requires .NET 9 Desktop Runtime. CapFrameX 1.9+ requires .NET 10 Desktop Runtime. TOTAL Profiler reads bundled CapFrameX results from Documents\\CapFrameX\\Captures. Browse may link any compatible existing version."
         };
         setupGrid.Controls.Add(capRuntimeNote, 0, 5); setupGrid.SetColumnSpan(capRuntimeNote, 4);
 
@@ -144,12 +144,8 @@ internal sealed class MainForm : Form
         if (cfg.UseBundledCapFrameX && File.Exists(ProfilerServices.BundledCapFrameXExe))
         {
             cfg.CapFrameXExe = ProfilerServices.BundledCapFrameXExe;
-            var detected = ProfilerServices.DetectCapFrameXPath(cfg.CapFrameXExe).Captures;
-            if (!string.IsNullOrWhiteSpace(detected))
-            {
-                cfg.CapFrameXResults = detected;
-                Directory.CreateDirectory(cfg.CapFrameXResults); // empty portable capture folder is valid
-            }
+            cfg.CapFrameXResults = ProfilerServices.BundledCapFrameXResults;
+            Directory.CreateDirectory(cfg.CapFrameXResults); // empty folder is valid before the first capture
             cfg.Save();
         }
 
@@ -173,12 +169,8 @@ internal sealed class MainForm : Form
 
         cfg.UseBundledCapFrameX = true;
         capExeBox.Text = ProfilerServices.BundledCapFrameXExe;
-        var detected = ProfilerServices.DetectCapFrameXPath(capExeBox.Text).Captures;
-        if (!string.IsNullOrWhiteSpace(detected))
-        {
-            capResultsBox.Text = detected;
-            Directory.CreateDirectory(capResultsBox.Text); // valid even before the first capture exists
-        }
+        capResultsBox.Text = ProfilerServices.BundledCapFrameXResults;
+        Directory.CreateDirectory(capResultsBox.Text); // valid even before the first capture exists
         SaveConfig();
         _ = RefreshStatusAsync();
     }
