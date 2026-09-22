@@ -7,7 +7,7 @@ internal sealed class AppConfig
     public string GameDirectory { get; set; } = "";
     public string CapFrameXExe { get; set; } = "";
     public string CapFrameXResults { get; set; } = "";
-    public string ResultsDirectory { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "G-Cyberpunk2077-TOTAL-Profiler", "Results");
+    public string ResultsDirectory { get; set; } = Path.Combine(AppContext.BaseDirectory, "Results");
     public string Scenario { get; set; } = "TEST";
     public bool CetCoreOnly { get; set; }
     public string LastCapture { get; set; } = "";
@@ -31,7 +31,17 @@ internal sealed class AppConfig
         try
         {
             if (!File.Exists(ConfigPath)) return new AppConfig();
-            return JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(ConfigPath), JsonOptions) ?? new AppConfig();
+            var cfg = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(ConfigPath), JsonOptions) ?? new AppConfig();
+
+            // v0.2.2 migration: only move the old untouched default. A user-selected
+            // custom results directory is preserved exactly.
+            var oldDefault = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "G-Cyberpunk2077-TOTAL-Profiler", "Results");
+            if (string.IsNullOrWhiteSpace(cfg.ResultsDirectory) ||
+                string.Equals(Path.GetFullPath(cfg.ResultsDirectory), Path.GetFullPath(oldDefault), StringComparison.OrdinalIgnoreCase))
+            {
+                cfg.ResultsDirectory = Path.Combine(AppContext.BaseDirectory, "Results");
+            }
+            return cfg;
         }
         catch
         {

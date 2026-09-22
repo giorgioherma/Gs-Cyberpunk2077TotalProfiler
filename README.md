@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.0 — native Windows rewrite
+## v0.2.2 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -26,7 +26,7 @@ Choose:
 - Cyberpunk 2077 directory
 - `CapFrameX.exe`
 - CapFrameX results folder (auto-detected when possible; manually selectable for custom layouts)
-- TOTAL Profiler results directory
+- TOTAL Profiler results directory — defaults to `Results\` beside the TOTAL Profiler executable
 
 Current capture controls:
 
@@ -55,3 +55,12 @@ GRSP and CET are synchronized evidence layers. They are **not additive CPU accou
 ## Windows reputation / antivirus
 
 The project is currently unsigned. A new unsigned executable can still receive SmartScreen/browser reputation warnings. v0.2.0 removes PyInstaller and the previous one-file/self-extracting packaging pattern. For a public production release, Authenticode code signing remains the correct long-term trust mechanism.
+
+
+## CapFrameX bundling and compatibility
+
+The Windows build bundles the **latest official CapFrameX portable release available from the upstream CXWorld/CapFrameX GitHub Releases page at build time**. The upstream release asset digest is verified when GitHub Actions provides it, and the upstream CapFrameX license is shipped with the artifact.
+
+TOTAL Profiler does **not** version-lock CapFrameX. Users may use the bundled copy or select an existing `CapFrameX.exe`, including previous compatible versions. TOTAL Profiler only depends on the capture data it needs for correlation; unsupported future capture-schema changes should be reported as a compatibility error rather than rejected by version number.
+
+CapFrameX remains a third-party project and is credited to its upstream authors.
