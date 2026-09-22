@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/TotalProfiler/**'
       - 'components/**'
+      - '.gitattributes'
       - 'README.md'
       - 'VERSION.txt'
       - '.github/workflows/build-windows.yml'
@@ -16,6 +17,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify bundled profiler payload bytes
+        shell: pwsh
+        run: |
+          $checks = @{
+            'components\cet\PAYLOAD\0-Engine\modules\Scheduler.lua' = '4030ef6d8fa743f7a4accf00406c2110f70162261232b564469d3eaa0b7c78cb'
+            'components\cet\PAYLOAD\0-Engine\modules\CETProfilerScheduler.lua' = '4030ef6d8fa743f7a4accf00406c2110f70162261232b564469d3eaa0b7c78cb'
+            'components\grsp\red4ext\plugins\redscript_profiler_alpha.dll' = '58b6caa3dccb03067d17a5d40ac049ba90cb74862b4302d7d2b5f91c5fca415d'
+          }
+          foreach ($path in $checks.Keys) {
+            if (!(Test-Path $path)) { throw "Bundled profiler payload missing: $path" }
+            $actual = (Get-FileHash $path -Algorithm SHA256).Hash.ToLower()
+            $expected = $checks[$path]
+            if ($actual -ne $expected) {
+              throw "Bundled profiler payload hash mismatch: $path expected=$expected actual=$actual"
+            }
+            Write-Host "OK $path $actual"
+          }
 
       - name: Set up .NET 8
         uses: actions/setup-dotnet@v4
@@ -43,6 +62,16 @@ jobs:
           if (!(Test-Path 'publish\components\grsp\red4ext\plugins\redscript_profiler_alpha.dll')) { throw 'GRSP payload missing' }
           if (!(Test-Path 'publish\components\cet\CET_Manager_Core.ps1')) { throw 'CET manager missing' }
 
+          $checks = @{
+            'publish\components\cet\PAYLOAD\0-Engine\modules\Scheduler.lua' = '4030ef6d8fa743f7a4accf00406c2110f70162261232b564469d3eaa0b7c78cb'
+            'publish\components\cet\PAYLOAD\0-Engine\modules\CETProfilerScheduler.lua' = '4030ef6d8fa743f7a4accf00406c2110f70162261232b564469d3eaa0b7c78cb'
+            'publish\components\grsp\red4ext\plugins\redscript_profiler_alpha.dll' = '58b6caa3dccb03067d17a5d40ac049ba90cb74862b4302d7d2b5f91c5fca415d'
+          }
+          foreach ($path in $checks.Keys) {
+            $actual = (Get-FileHash $path -Algorithm SHA256).Hash.ToLower()
+            if ($actual -ne $checks[$path]) { throw "Published payload hash mismatch: $path" }
+          }
+
       - name: Stage transparent portable package
         shell: pwsh
         run: |
@@ -53,12 +82,13 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
           @(
             "G's Cyberpunk 2077 TOTAL Profiler"
-            "Version: 0.2.0"
+            "Version: 0.2.1"
             "Git commit: $env:GITHUB_SHA"
             "Runtime: .NET 8 self-contained win-x64"
-            "Packaging: normal framework-dependent files; NOT PyInstaller; NOT self-extracting"
+            "Packaging: normal self-contained .NET files; NOT PyInstaller; NOT self-extracting"
             "Python required: no"
             ".NET installation required: no"
+            "Bundled profiler payload hashes: verified during build"
           ) | Set-Content -Encoding UTF8 stage\BUILD_INFO.txt
           Push-Location stage
           Get-ChildItem -File -Recurse |
@@ -74,5 +104,5 @@ jobs:
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Gs-Cyberpunk2077-TOTAL-Profiler-0.2.0-NATIVE-Windows-x64
+          name: Gs-Cyberpunk2077-TOTAL-Profiler-0.2.1-NATIVE-Windows-x64
           path: stage
