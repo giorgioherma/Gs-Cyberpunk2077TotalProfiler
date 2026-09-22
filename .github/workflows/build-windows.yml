@@ -1,5 +1,9 @@
 name: Build TOTAL Profiler Native Windows App
 
+permissions:
+  contents: write
+  actions: read
+
 on:
   workflow_dispatch:
   push:
@@ -201,7 +205,80 @@ jobs:
           Pop-Location
 
       - name: Upload Windows artifact
+        id: upload_public_artifact
         uses: actions/upload-artifact@v4
         with:
           name: GCTP-GCyberpunkTotalProfiler
           path: stage
+
+      # PUBLIC DISTRIBUTION RULE:
+      # Do not re-zip stage locally for Releases. The browser-clean package is the
+      # archive GitHub itself creates for the Actions artifact. Download those exact
+      # bytes back from GitHub and attach that archive unchanged to the Release.
+      - name: Fetch exact GitHub artifact archive for public release
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.upload_public_artifact.outputs.artifact-id }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:ARTIFACT_ID)) { throw 'upload-artifact did not return an artifact id.' }
+
+          $asset = 'Gs_Cyberpunk2077_TOTAL_Profiler_v0.2.19.zip'
+          $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/artifacts/$env:ARTIFACT_ID/zip"
+
+          curl.exe -fL -H "Authorization: Bearer $env:GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" $uri -o $asset
+
+          if (!(Test-Path -LiteralPath $asset -PathType Leaf)) { throw 'GitHub artifact archive download failed.' }
+          $size = (Get-Item -LiteralPath $asset).Length
+          if ($size -lt 1000000) { throw "Downloaded GitHub artifact archive is unexpectedly small: $size bytes" }
+
+          $hash = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $asset" | Set-Content -Encoding ASCII "$asset.sha256.txt"
+          "PUBLIC_ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "PUBLIC_SHA256=$hash" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          Write-Host "Exact GitHub artifact archive: $asset"
+          Write-Host "SHA256: $hash"
+
+      - name: Publish exact artifact archive as GitHub prerelease
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'v0.2.19-public'
+          $title = "G's Cyberpunk 2077 TOTAL Profiler v0.2.19"
+          $asset = $env:PUBLIC_ASSET
+          $shaAsset = "$asset.sha256.txt"
+
+          $notes = @(
+            "Public Windows build of G's Cyberpunk 2077 TOTAL Profiler v0.2.19."
+            ""
+            "Distribution note:"
+            "- C# / .NET 8 self-contained win-x64"
+            "- normal transparent multi-file package"
+            "- no Python"
+            "- no PyInstaller"
+            "- no UPX"
+            "- no self-extracting wrapper"
+            "- this Release ZIP is the exact archive generated and served by GitHub Actions for the successful build artifact; it is not re-packed locally"
+            ""
+            "SHA-256:"
+            $env:PUBLIC_SHA256
+          ) -join [Environment]::NewLine
+
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title $title --notes $notes --prerelease
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create GitHub prerelease.' }
+          }
+          else {
+            gh release edit $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title $title --notes $notes --prerelease
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update GitHub prerelease.' }
+          }
+
+          gh release upload $tag $asset $shaAsset --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Could not upload public Release assets.' }
+
+          Write-Host "Published exact GitHub artifact archive to prerelease $tag"
