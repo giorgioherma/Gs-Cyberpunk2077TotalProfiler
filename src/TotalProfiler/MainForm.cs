@@ -47,6 +47,7 @@ internal sealed class MainForm : Form
     private readonly Panel capturePage = new();
     private readonly Panel resultsPage = new();
     private readonly GroupBox advancedPaths = new();
+    private readonly GroupBox advancedRecovery = new();
     private readonly GroupBox technicalLog = new();
 
     private bool busy;
@@ -295,6 +296,38 @@ internal sealed class MainForm : Form
         installActions.Controls.Add(installButton);
         installActions.Controls.Add(refresh);
         body.Controls.Add(installActions);
+
+        // Keep recovery on the install screen. If verification/install gets into a bad
+        // state, the user must be able to restore the managed game files without first
+        // passing verification or navigating to Results.
+        var recoveryToggle = new Button { Text = "Advanced / recovery ▼", AutoSize = true, Height = 30, Margin = new Padding(0, 10, 0, 3) };
+        recoveryToggle.Click += (_, _) =>
+        {
+            advancedRecovery.Visible = !advancedRecovery.Visible;
+            recoveryToggle.Text = advancedRecovery.Visible ? "Advanced / recovery ▲" : "Advanced / recovery ▼";
+        };
+        body.Controls.Add(recoveryToggle);
+
+        advancedRecovery.Text = "Advanced / recovery";
+        advancedRecovery.Dock = DockStyle.Fill;
+        advancedRecovery.AutoSize = true;
+        advancedRecovery.Padding = new Padding(10);
+        advancedRecovery.Visible = false;
+
+        var recoveryFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
+        var restoreAll = new Button { Text = "RESTORE ORIGINAL STATE", Width = 195, Height = 32 };
+        restoreAll.Click += async (_, _) => await RestoreAllAsync();
+        recoveryFlow.Controls.Add(restoreAll);
+        recoveryFlow.Controls.Add(new Label
+        {
+            Text = "Use this if install/verification goes wrong. Restores TOTAL Profiler-managed game/config files. Already-collected Results stay.",
+            AutoSize = true,
+            MaximumSize = new Size(520, 0),
+            Margin = new Padding(10, 8, 0, 0),
+            ForeColor = SystemColors.GrayText
+        });
+        advancedRecovery.Controls.Add(recoveryFlow);
+        body.Controls.Add(advancedRecovery);
 
         var logToggle = new Button { Text = "Technical log ▼", AutoSize = true, Height = 30, Margin = new Padding(0, 5, 0, 3) };
         logToggle.Click += (_, _) =>
