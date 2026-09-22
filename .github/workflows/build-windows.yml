@@ -159,7 +159,7 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
           @(
             "G's Cyberpunk 2077 TOTAL Profiler"
-            'Version: 0.2.5'
+            'Version: 0.2.6'
             "Git commit: $env:GITHUB_SHA"
             'Runtime: .NET 8 self-contained win-x64'
             'Packaging: normal self-contained .NET files; NOT PyInstaller; NOT self-extracting'
@@ -183,5 +183,5 @@ jobs:
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Gs-Cyberpunk2077-TOTAL-Profiler-0.2.5-NATIVE-Windows-x64
+          name: GCTP-GCyberpunkTotalProfiler
           path: stage

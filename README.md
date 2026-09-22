@@ -7,7 +7,7 @@ Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.5 — native Windows controller
+## v0.2.6 — native Windows controller
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -77,3 +77,12 @@ For the bundled CapFrameX 1.8.6 copy, TOTAL Profiler supplies the standard porta
 The capture directory is created in the artifact and is considered valid while empty; it does not need a JSON capture until results are actually collected.
 
 The bundled portable process list starts with `dwm` (Windows Desktop Window Manager) ignored. This keeps the CapFrameX running-process list clear before Cyberpunk starts, while users remain free to edit the CapFrameX ignore list themselves.
+
+
+## Package folder name
+
+The GitHub Actions Windows artifact uses the short package name:
+
+`GCTP-GCyberpunkTotalProfiler`
+
+This keeps the extracted application path short. The executable name and in-app product name remain unchanged.
