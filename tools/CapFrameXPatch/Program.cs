@@ -35,7 +35,15 @@ static Instruction CloneStore(ILProcessor il, Instruction store) => store.OpCode
 var originalHash = Sha256(path);
 var temp = path + ".gctp-patched";
 
-using (var asm = AssemblyDefinition.ReadAssembly(path, new ReaderParameters { InMemory = true, ReadSymbols = false }))
+var resolver = new DefaultAssemblyResolver();
+resolver.AddSearchDirectory(Path.GetDirectoryName(path)!);
+
+using (var asm = AssemblyDefinition.ReadAssembly(path, new ReaderParameters
+{
+    InMemory = true,
+    ReadSymbols = false,
+    AssemblyResolver = resolver
+}))
 {
     var type = asm.MainModule.Types.FirstOrDefault(t => t.FullName == "CapFrameX.CapFrameXViewRegion")
         ?? throw new InvalidOperationException("CapFrameX.CapFrameXViewRegion was not found.");
