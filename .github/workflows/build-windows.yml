@@ -106,15 +106,14 @@ jobs:
           # CapFrameX supplies all other settings from its own defaults.
           # Keep the Double literals explicit. PowerShell ConvertTo-Json serializes 0.0 as 0,
           # but CapFrameX 1.9.1 beta strictly expects Double for CaptureTime/CaptureDelay.
-          $appSettingsJson = @'
-{
-  "CaptureHotKey": "F11",
-  "CaptureTime": 0.0,
-  "CaptureDelay": 0.0
-}
-'@
           $appSettingsPath = Join-Path $cfgDir 'AppSettings.json'
-          $appSettingsJson | Set-Content -Encoding UTF8 $appSettingsPath
+          @(
+            '{'
+            '  "CaptureHotKey": "F11",'
+            '  "CaptureTime": 0.0,'
+            '  "CaptureDelay": 0.0'
+            '}'
+          ) | Set-Content -Encoding UTF8 $appSettingsPath
           $seeded = Get-Content $appSettingsPath -Raw
           if ($seeded -notmatch '"CaptureTime"\s*:\s*0\.0') { throw 'CapFrameX CaptureTime must be emitted as JSON Double literal 0.0' }
           if ($seeded -notmatch '"CaptureDelay"\s*:\s*0\.0') { throw 'CapFrameX CaptureDelay must be emitted as JSON Double literal 0.0' }
