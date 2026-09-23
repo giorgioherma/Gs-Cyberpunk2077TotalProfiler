@@ -826,6 +826,7 @@ internal sealed class MainForm : Form
                 bool grspOk = false;
                 bool cetOk = false;
                 bool controlsOk = false;
+                int cetLiveCount = 0;
 
                 if (v.Ok)
                 {
@@ -846,7 +847,8 @@ internal sealed class MainForm : Form
                         var controls = J(r, "controlsPresent");
                         cetOk = cetState == "PROFILER_ACTIVE" && managed == "True";
                         controlsOk = controls == "True";
-                        cet = $"{cetState} · managed {managed} · controls {controls} · live CSVs {J(r, "liveResultCount")}";
+                        int.TryParse(J(r, "liveResultCount"), out cetLiveCount);
+                        cet = $"{cetState} · managed {managed} · controls {controls} · live CSVs {cetLiveCount}";
                         zero = J(r, "zeroEnginePresent") == "True"
                             ? $"{J(r, "zeroEngineInit")} · {J(r, "scheduler")}{(string.IsNullOrWhiteSpace(J(r, "managedMode")) ? "" : " · managed mode " + J(r, "managedMode"))}"
                             : "Not found — core CET profiling only";
@@ -871,13 +873,32 @@ internal sealed class MainForm : Form
                 bool capConfigured = capFound && IsCapFrameXCaptureConfigured(snap.CapFrameXExe);
                 bool verified = v.Ok && grspOk && cetOk && controlsOk && cetBind && capFound && capConfigured;
 
-                return (v, grsp, cet, zero, cap, cetBind, capConfigured, verified);
+                var boundary = snap.CaptureResetUtc?.UtcDateTime;
+                bool grspFresh = v.Ok && ProfilerServices.LatestGrspCapture(snap.GameDirectory, boundary) is not null;
+                bool capFresh = capFound && ProfilerServices.LatestValidCapXCapture(snap.CapFrameXResults, boundary) is not null;
+                bool ready = grspFresh && cetLiveCount > 0 && capFresh;
+
+                return (v, grsp, cet, zero, cap, cetBind, capConfigured, verified, ready);
             });
 
             gameValid = data.v.Ok;
             cetBindingVerified = data.cetBind;
             capSettingsVerified = data.capConfigured;
             installVerified = data.verified;
+            measurementReady = data.ready;
+
+            if (measurementReady && string.Equals(cfg.ResultStage, "complete", StringComparison.OrdinalIgnoreCase))
+            {
+                // A new full set of profiler outputs exists after the previous completion boundary.
+                cfg.ResultStage = "";
+                cfg.Save();
+            }
+            else if (!measurementReady && string.IsNullOrWhiteSpace(cfg.ResultStage) && CaptureIsComplete(cfg.LastCapture))
+            {
+                // Migration/restart recovery for captures completed by an older app build.
+                cfg.ResultStage = "complete";
+                cfg.Save();
+            }
 
             setupGameStatus.Text = (gameValid ? "✓ " : "✗ ") + data.v.Message;
             setupGameStatus.ForeColor = gameValid ? Color.DarkGreen : Color.DarkRed;
@@ -887,21 +908,38 @@ internal sealed class MainForm : Form
             cetStatus.Text = data.cet;
             zeroStatus.Text = data.zero;
             capStatus.Text = data.cap;
-            cetBindingStatus.Text = data.cetBind ? "F11 ✓ · TOTAL Profiler managed" : "NOT VERIFIED";
+            cetBindingStatus.Text = data.cetBind ? "F11 ✓ · CET standalone managed" : "NOT VERIFIED";
             capBindingStatus.Text = data.capConfigured ? "F11 + unlimited capture ✓" : "NOT VERIFIED";
             installStatus.Text = installVerified ? "VERIFIED ✓ · ready for capture" : "NOT READY · run INSTALL / VERIFY";
             installStatus.ForeColor = installVerified ? Color.DarkGreen : Color.DarkRed;
 
             captureReadiness.Text =
                 $"Automatic checks: {(installVerified ? "READY ✓" : "NOT READY")}   ·   CET F11 {(cetBindingVerified ? "✓" : "✗")}   ·   CapFrameX F11/unlimited {(capSettingsVerified ? "✓" : "✗")}\r\n" +
-                "First-run manual check: make sure CapFrameX (Capture tab), REDscript profiler (currently hard-coded F11), and CET profiler (CET binding) all use the same F11 start/stop key. If CapFrameX is not recording, make sure Cyberpunk2077.exe is the only active capture process.";
+                "First-run manual check: CapFrameX Capture, GRSP and CET must all use F11. CET standalone defaults to one F11 START / STOP key and exports automatically on STOP. If CapFrameX is not recording, make sure Cyberpunk2077.exe is the only active capture process.";
             captureReadiness.ForeColor = installVerified ? Color.DarkGreen : Color.DarkRed;
 
-            resultsLocationStatus.Text = $"Results folder: {cfg.ResultsDirectory}";
-            if (!string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture))
-                lastCaptureStatus.Text = $"Latest collected capture: {Path.GetFileName(cfg.LastCapture)}\r\n{cfg.LastCapture}";
+            resultsLocationStatus.Text = "";
+            if (string.Equals(cfg.ResultStage, "collected", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture))
+            {
+                lastCaptureStatus.Text = $"Collected ✓ · comparison/packaging pending\r\n{Path.GetFileName(cfg.LastCapture)}";
+            }
+            else if (HasCompletedResult())
+            {
+                lastCaptureStatus.Text = $"Complete ✓ · {Path.GetFileName(cfg.LastCapture)}\r\n{cfg.LastCapture}";
+            }
+            else if (measurementReady)
+            {
+                lastCaptureStatus.Text = "Measurement detected ✓ · ready to COLLECT & COMPARE RESULTS.";
+            }
+            else if (!string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture))
+            {
+                lastCaptureStatus.Text = $"Last result: {Path.GetFileName(cfg.LastCapture)}\r\nFinish a new F11 measurement to create another result.";
+            }
             else
-                lastCaptureStatus.Text = "No collected capture selected yet.";
+            {
+                lastCaptureStatus.Text = "Finish a synchronized F11 measurement, then return here.";
+            }
 
             UpdateActionState();
         }
