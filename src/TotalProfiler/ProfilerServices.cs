@@ -10,12 +10,12 @@ namespace GsCyberpunkTotalProfiler;
 internal static class ProfilerServices
 {
     public const string AppName = "G's Cyberpunk 2077 TOTAL Profiler";
-    public const string Version = "0.2.19";
+    public const string Version = "0.2.20";
     public const string GrspVersion = "0.5.0";
-    public const string CetVersion = "3.0.0-alpha6b";
+    public const string CetVersion = "3.0.0-alpha6c";
     public const string CorrelatorVersion = "0.2.1-native";
     public const string CaptureKey = "F11";
-    public const string CetExportKey = "F12";
+    public const string CetExportKey = "F11 STOP + AUTO EXPORT";
     public const string BundledCapFrameXVersion = "1.9.1.2 Beta";
     public const string GrspDllSha256 = "58b6caa3dccb03067d17a5d40ac049ba90cb74862b4302d7d2b5f91c5fca415d";
 
@@ -437,106 +437,13 @@ internal static class ProfilerServices
             : "GRSP DLL restored; legacy profiler RESULTS cleaned.";
     }
 
-    public static string SyncCetProfilerControls(string gameRoot)
-    {
-        if (IsGameRunning()) throw new InvalidOperationException("Cyberpunk 2077 is running. Close it before updating CET profiler controls.");
-
-        var src = Path.Combine(ComponentsDirectory, "cet", "PAYLOAD", "CETProfilerControls");
-        var dst = Path.Combine(gameRoot, "bin", "x64", "plugins", "cyber_engine_tweaks", "mods", "CETProfilerControls");
-        if (!Directory.Exists(src)) throw new DirectoryNotFoundException("Bundled CETProfilerControls payload is missing.");
-
-        if (Directory.Exists(dst)) Directory.Delete(dst, true);
-        CopyTree(src, dst);
-        return "TOTAL Profiler CET controls updated: one shared key starts; the same key stops + exports CSV automatically.";
-    }
-
-    public static string ConfigureCetProfilerBinding(string gameRoot)
-    {
-        if (IsGameRunning()) throw new InvalidOperationException("Cyberpunk 2077 is running. Close it before configuring CET bindings.");
-
-        var cetRoot = Path.Combine(gameRoot, "bin", "x64", "plugins", "cyber_engine_tweaks");
-        Directory.CreateDirectory(cetRoot);
-        var bindingsPath = Path.Combine(cetRoot, "bindings.json");
-        var statePath = Path.Combine(cetRoot, ".gctp_cet_profiler_binding_state.json");
-        var bindingsFileExisted = File.Exists(bindingsPath);
-
-        System.Text.Json.Nodes.JsonObject root;
-        if (bindingsFileExisted)
-        {
-            var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(bindingsPath));
-            root = parsed as System.Text.Json.Nodes.JsonObject ?? throw new InvalidOperationException("CET bindings.json root is not an object.");
-        }
-        else root = new System.Text.Json.Nodes.JsonObject();
-
-        const string modName = "CETProfilerControls";
-        if (!File.Exists(statePath))
-        {
-            var hadNode = root[modName] is not null;
-            var state = new System.Text.Json.Nodes.JsonObject
-            {
-                ["bindingsFileExisted"] = bindingsFileExisted,
-                ["hadNode"] = hadNode,
-                ["node"] = hadNode ? root[modName]!.DeepClone() : null
-            };
-            File.WriteAllText(statePath, state.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
-        }
-
-        // CET encodes a simple F11 input as 0x007A000000000000.
-        // GRSP is currently hardcoded to F11, so TOTAL Profiler keeps the shared key F11.
-        const long f11BindCode = 34339947158700032L;
-        var mod = root[modName] as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
-        mod["CETProfiler_Toggle"] = f11BindCode;
-        mod.Remove("CETProfiler_Dump");
-        root[modName] = mod;
-
-        File.WriteAllText(bindingsPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
-        return "CET shared capture binding managed automatically by TOTAL Profiler: F11 START / F11 STOP + EXPORT.";
-    }
-
-    public static string RestoreCetProfilerBinding(string gameRoot)
-    {
-        var cetRoot = Path.Combine(gameRoot, "bin", "x64", "plugins", "cyber_engine_tweaks");
-        var bindingsPath = Path.Combine(cetRoot, "bindings.json");
-        var statePath = Path.Combine(cetRoot, ".gctp_cet_profiler_binding_state.json");
-        if (!File.Exists(statePath)) return "No TOTAL Profiler CET binding state was present.";
-
-        var state = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(statePath)) as System.Text.Json.Nodes.JsonObject
-                    ?? throw new InvalidOperationException("TOTAL Profiler CET binding state is invalid.");
-        System.Text.Json.Nodes.JsonObject root;
-        if (File.Exists(bindingsPath))
-        {
-            var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(bindingsPath));
-            root = parsed as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
-        }
-        else root = new System.Text.Json.Nodes.JsonObject();
-
-        var hadNode = state["hadNode"]?.GetValue<bool>() == true;
-        var existedNode = state["bindingsFileExisted"];
-        var bindingsFileExisted = existedNode is null || existedNode.GetValue<bool>();
-        if (hadNode && state["node"] is not null) root["CETProfilerControls"] = state["node"]!.DeepClone();
-        else root.Remove("CETProfilerControls");
-
-        if (!bindingsFileExisted && root.Count == 0)
-        {
-            if (File.Exists(bindingsPath)) File.Delete(bindingsPath);
-        }
-        else
-        {
-            File.WriteAllText(bindingsPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
-        }
-
-        File.Delete(statePath);
-        return "CET binding state restored.";
-    }
-
-    public static async Task<JsonDocument> CallCetAsync(string action, string gameRoot, string? resultsRoot = null, bool coreOnly = false, bool discardLiveOnRestore = false)
+    public static async Task<JsonDocument> CallCetAsync(string action, string gameRoot, string? resultsRoot = null, bool coreOnly = false)
     {
         var script = Path.Combine(ComponentsDirectory, "cet", "CET_Manager_Core.ps1");
         if (!File.Exists(script)) throw new FileNotFoundException("Bundled CET manager is missing.", script);
         var args = new List<string> { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Quote(script), "-Action", action, "-GameRoot", Quote(gameRoot) };
         if (!string.IsNullOrWhiteSpace(resultsRoot)) { args.Add("-ResultsRoot"); args.Add(Quote(resultsRoot!)); }
         if (coreOnly) args.Add("-CoreProfilerOnly");
-        if (discardLiveOnRestore) args.Add("-DiscardLiveResultsOnRestore");
         var psi = new ProcessStartInfo("powershell.exe", string.Join(' ', args))
         {
             RedirectStandardOutput = true,
@@ -550,10 +457,30 @@ internal static class ProfilerServices
         await p.WaitForExitAsync();
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
-        if (p.ExitCode != 0) throw new InvalidOperationException((string.IsNullOrWhiteSpace(stderr) ? stdout : stderr).Trim());
+        if (p.ExitCode != 0) throw new InvalidOperationException(CleanPowerShellError(stdout, stderr));
         var line = stdout.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Reverse().FirstOrDefault(x => x.TrimStart().StartsWith('{'));
         if (line is null) throw new InvalidOperationException("CET manager did not return status JSON.");
         return JsonDocument.Parse(line);
+    }
+
+    private static string CleanPowerShellError(string stdout, string stderr)
+    {
+        var raw = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+        var lines = raw.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .Where(x => !x.StartsWith("At ", StringComparison.OrdinalIgnoreCase))
+            .Where(x => !x.StartsWith("+ CategoryInfo", StringComparison.OrdinalIgnoreCase))
+            .Where(x => !x.StartsWith("+ FullyQualifiedErrorId", StringComparison.OrdinalIgnoreCase))
+            .Where(x => !x.StartsWith("+ ", StringComparison.Ordinal))
+            .ToList();
+
+        if (lines.Count == 0) return raw.Trim();
+        var first = lines[0];
+        var colon = first.IndexOf(": ", StringComparison.Ordinal);
+        if (colon >= 0 && first[..colon].Contains(".ps1", StringComparison.OrdinalIgnoreCase))
+            first = first[(colon + 2)..].Trim();
+        return first;
     }
 
     private static string Quote(string s) => "\"" + s.Replace("\"", "\\\"") + "\"";
