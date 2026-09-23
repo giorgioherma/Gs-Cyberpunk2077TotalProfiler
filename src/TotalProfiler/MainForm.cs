@@ -1138,7 +1138,7 @@ internal sealed class MainForm : Form
         if (MessageBox.Show(this,
             "Reset the CURRENT capture state?\r\n\r\n" +
             "Use this after an incomplete/failed F11 run.\r\n\r\n" +
-            "Current/latest raw GRSP, CET and CapFrameX data is moved to Results\\Discarded. Already-collected Results are untouched.\r\n\r\n" +
+            "TOTAL will ignore the current GRSP and CapFrameX outputs from this point forward. CET live CSVs are archived by the standalone CET profiler into its own RESULTS folder. Existing profiler result files are otherwise left where their profilers normally write them.\r\n\r\n" +
             "Cyberpunk 2077 must be closed.",
             ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
@@ -1149,50 +1149,34 @@ internal sealed class MainForm : Form
                 throw new InvalidOperationException("Cyberpunk 2077 is running. Close it before resetting capture state.");
 
             var resetStarted = DateTimeOffset.UtcNow;
-            var discardRoot = Path.Combine(cfg.ResultsDirectory, "Discarded", $"Reset_{DateTime.Now:yyyyMMdd-HHmmss}");
-            Directory.CreateDirectory(discardRoot);
             var notes = new List<string>();
 
             var grsp = ProfilerServices.LatestGrspCapture(cfg.GameDirectory, cfg.CaptureResetUtc?.UtcDateTime);
-            if (grsp is not null && Directory.Exists(grsp))
-            {
-                var dstRoot = Path.Combine(discardRoot, "GRSP");
-                Directory.CreateDirectory(dstRoot);
-                var dst = Path.Combine(dstRoot, Path.GetFileName(grsp));
-                Directory.Move(grsp, dst);
-                var latestTxt = Path.Combine(cfg.GameDirectory, "red4ext", "plugins", "redscript_profiler_alpha", "RESULTS", "LATEST.txt");
-                if (File.Exists(latestTxt)) File.Delete(latestTxt);
-                notes.Add($"GRSP: archived {Path.GetFileName(grsp)}.");
-            }
-            else notes.Add("GRSP: no current capture to reset.");
+            notes.Add(grsp is null
+                ? "GRSP: no current capture detected."
+                : $"GRSP: {Path.GetFileName(grsp)} left in the GRSP RESULTS folder and ignored for the next measurement.");
 
             try
             {
-                var cetRoot = Path.Combine(discardRoot, "CET");
-                Directory.CreateDirectory(cetRoot);
-                using var r = await ProfilerServices.CallCetAsync("ResetLive", cfg.GameDirectory, cetRoot);
+                using var r = await ProfilerServices.CallCetAsync("ResetLive", cfg.GameDirectory);
                 var archived = J(r.RootElement, "archived");
-                notes.Add(string.IsNullOrWhiteSpace(archived) ? "CET: no live CSV results to reset." : $"CET: live CSVs archived to {archived}.");
+                notes.Add(string.IsNullOrWhiteSpace(archived)
+                    ? "CET: no live CSV results to reset."
+                    : $"CET: current live CSVs archived by standalone CET to {archived}.");
             }
             catch (Exception ex)
             {
-                notes.Add("CET: reset failed · " + ex.Message.Split('\n').Last());
+                notes.Add("CET: reset failed · " + ex.Message);
             }
 
             var cap = ProfilerServices.LatestValidCapXCapture(cfg.CapFrameXResults, cfg.CaptureResetUtc?.UtcDateTime);
-            if (cap is not null && File.Exists(cap))
-            {
-                var dstRoot = Path.Combine(discardRoot, "CapFrameX");
-                Directory.CreateDirectory(dstRoot);
-                var dst = Path.Combine(dstRoot, Path.GetFileName(cap));
-                if (File.Exists(dst))
-                    dst = Path.Combine(dstRoot, $"{Path.GetFileNameWithoutExtension(cap)}_{DateTime.Now:HHmmss}{Path.GetExtension(cap)}");
-                File.Move(cap, dst);
-                notes.Add($"CapFrameX: archived {Path.GetFileName(cap)}.");
-            }
-            else notes.Add("CapFrameX: no current valid capture to reset.");
+            notes.Add(cap is null
+                ? "CapFrameX: no current valid capture detected."
+                : $"CapFrameX: {Path.GetFileName(cap)} left in the CapFrameX captures folder and ignored for the next measurement.");
 
             cfg.CaptureResetUtc = resetStarted;
+            cfg.ResultStage = "";
+            measurementReady = false;
             cfg.Save();
 
             foreach (var note in notes) Log(note);
@@ -1200,6 +1184,8 @@ internal sealed class MainForm : Form
             MessageBox.Show(this,
                 string.Join("\r\n", notes) + "\r\n\r\nCapture state is clean for the next F11 run.",
                 ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            await RefreshStatusAsync();
         });
     }
 
@@ -1226,30 +1212,21 @@ internal sealed class MainForm : Form
                 using var status = await ProfilerServices.CallCetAsync("Status", cfg.GameDirectory);
                 if (J(status.RootElement, "managed") == "True")
                 {
-                    using var r = await ProfilerServices.CallCetAsync("Restore", cfg.GameDirectory, discardLiveOnRestore: true);
-                    var discarded = J(r.RootElement, "discardedLiveResultCount");
-                    notes.Add("CET / 0-Engine: original files restored; live uncollected CET CSVs discarded" +
-                              (string.IsNullOrWhiteSpace(discarded) ? "." : $" ({discarded})."));
+                    using var r = await ProfilerServices.CallCetAsync("Restore", cfg.GameDirectory);
+                    var archived = J(r.RootElement, "archived");
+                    notes.Add(string.IsNullOrWhiteSpace(archived)
+                        ? "Standalone CET / 0-Engine: original files and previous F11 binding state restored."
+                        : $"Standalone CET / 0-Engine: original files and previous F11 binding state restored; final CET results archived to {archived}.");
                 }
                 else
                 {
-                    notes.Add("CET / 0-Engine: no TOTAL Profiler managed state was present.");
+                    notes.Add("Standalone CET / 0-Engine: no managed profiler state was present.");
                 }
             }
             catch (Exception ex)
             {
                 failed = true;
-                notes.Add("CET / 0-Engine: RESTORE FAILED · " + ex.Message.Split('\n').Last());
-            }
-
-            try
-            {
-                notes.Add("CET binding: " + await Task.Run(() => ProfilerServices.RestoreCetProfilerBinding(cfg.GameDirectory)));
-            }
-            catch (Exception ex)
-            {
-                failed = true;
-                notes.Add("CET binding: RESTORE FAILED · " + ex.Message);
+                notes.Add("Standalone CET / 0-Engine: RESTORE FAILED · " + ex.Message);
             }
 
             try
@@ -1316,34 +1293,58 @@ internal sealed class MainForm : Form
         });
     }
 
-    private void OpenLatestReportOrFolder()
+    private bool HasCompletedResult()
     {
-        SaveConfig();
-
-        if (!string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture))
-        {
-            var combined = Path.Combine(cfg.LastCapture, "Combined", "GRSP_Combined_Report.html");
-            if (File.Exists(combined))
-            {
-                ProfilerServices.OpenPath(combined);
-                return;
-            }
-
-            var grsp = Path.Combine(cfg.LastCapture, "Raw", "GRSP", "GRSP_Report.html");
-            if (File.Exists(grsp))
-            {
-                ProfilerServices.OpenPath(grsp);
-                return;
-            }
-
-            ProfilerServices.OpenPath(cfg.LastCapture);
-            return;
-        }
-
-        ProfilerServices.OpenPath(cfg.ResultsDirectory);
+        return string.Equals(cfg.ResultStage, "complete", StringComparison.OrdinalIgnoreCase) &&
+               CaptureIsComplete(cfg.LastCapture);
     }
 
-    private void OpenLatest()
+    private static bool CaptureIsComplete(string? capture)
+    {
+        if (string.IsNullOrWhiteSpace(capture) || !Directory.Exists(capture)) return false;
+        var combined = Path.Combine(capture, "Combined");
+        if (!Directory.Exists(combined)) return false;
+        var report = Directory.EnumerateFiles(combined, "*.html", SearchOption.TopDirectoryOnly).FirstOrDefault();
+        if (report is null) return false;
+        return Directory.EnumerateFiles(capture, "*_FULL.zip", SearchOption.TopDirectoryOnly).Any();
+    }
+
+    private string? FindFullCaptureOverview()
+    {
+        if (string.IsNullOrWhiteSpace(cfg.LastCapture) || !Directory.Exists(cfg.LastCapture)) return null;
+
+        var manifestPath = Path.Combine(cfg.LastCapture, "CaptureManifest.json");
+        try
+        {
+            if (File.Exists(manifestPath))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
+                if (doc.RootElement.TryGetProperty("combined_report", out var reportNode) &&
+                    reportNode.ValueKind == JsonValueKind.String)
+                {
+                    var report = reportNode.GetString();
+                    if (!string.IsNullOrWhiteSpace(report) && File.Exists(report)) return report;
+                }
+            }
+        }
+        catch { }
+
+        var combined = Path.Combine(cfg.LastCapture, "Combined");
+        if (!Directory.Exists(combined)) return null;
+        return Directory.EnumerateFiles(combined, "*.html", SearchOption.TopDirectoryOnly)
+            .OrderBy(Path.GetFileName)
+            .FirstOrDefault();
+    }
+
+    private void OpenFullCaptureOverview()
+    {
+        SaveConfig();
+        if (!HasCompletedResult()) return;
+        var report = FindFullCaptureOverview();
+        if (report is not null) ProfilerServices.OpenPath(report);
+    }
+
+    private void OpenResultDirectory()
     {
         SaveConfig();
 
@@ -1353,22 +1354,8 @@ internal sealed class MainForm : Form
             return;
         }
 
-        if (!Directory.Exists(cfg.ResultsDirectory)) return;
-
-        var p = Directory.EnumerateDirectories(cfg.ResultsDirectory, "Capture_*", SearchOption.TopDirectoryOnly)
-            .OrderByDescending(Directory.GetLastWriteTimeUtc)
-            .FirstOrDefault();
-
-        if (p is null)
-        {
+        if (Directory.Exists(cfg.ResultsDirectory))
             ProfilerServices.OpenPath(cfg.ResultsDirectory);
-            return;
-        }
-
-        cfg.LastCapture = p;
-        cfg.Save();
-        ProfilerServices.OpenPath(p);
-        UpdateActionState();
     }
 
     private static string J(JsonElement root, string name)
