@@ -1,5 +1,5 @@
 {
-  "packageVersion": "3.0.0-alpha6b",
+  "packageVersion": "3.0.0-alpha6c",
   "profilerNativeVersion": "2.11.0",
   "targetCET": {
     "version": "1.37.1",
@@ -26,13 +26,15 @@
     "CET_Runtime_Profile_Scheduler_FrameBursts.csv"
   ],
   "managerChanges": [
+    "single CETProfiler_Toggle input defaults to F11",
+    "first F11 starts a fresh measurement; second F11 stops and automatically exports CSV results",
+    "CET binding state is stored inside the persistent game-side profiler state and restored transactionally",
+    "standalone RESULTS remain package-local; TOTAL Profiler does not redirect profiler-owned output paths",
     "0-Engine status reports FOUND - UNVERIFIED instead of claiming arbitrary versions are compatible",
     "Core profiler fallback leaves the user's 0-Engine folder and Scheduler completely untouched and loaded normally",
     "recognized unintegrated 0-Engine versions are patched transactionally using their own init.lua",
     "adaptive mode uses unique modules/CETProfilerScheduler.lua to avoid colliding with 0-Engine Scheduler.lua",
     "existing PASS/Scheduler-integrated 0-Engine keeps the proven Scheduler.lua swap path",
-    "event-driven status refresh on window activation plus manual refresh",
-    "results remain package-local and popup displays exact archive destination",
-    "CETProfilerControls always removed on restore"
+    "CETProfilerControls remains temporary profiler-owned UI and is removed on restore"
   ]
 }
