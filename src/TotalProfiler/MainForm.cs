@@ -1002,18 +1002,17 @@ internal sealed class MainForm : Form
             var br = before.RootElement;
             if (J(br, "managed") == "True" && J(br, "cet") == "PROFILER_ACTIVE")
             {
-                Log("CET profiler already managed; keeping profiler/0-Engine state and updating TOTAL Profiler controls.");
+                if (J(br, "f11Binding") != "True")
+                    throw new InvalidOperationException("An older managed CET profiler install is active without the standalone F11 binding state. Restore that CET profiler state first, then run INSTALL / VERIFY again.");
+                Log("Standalone CET profiler state already active; keeping its profiler / 0-Engine transaction unchanged.");
             }
             else
             {
-                Log($"Installing CET Runtime Profiler {ProfilerServices.CetVersion}...");
-                using var cet = await ProfilerServices.CallCetAsync("Install", cfg.GameDirectory, cfg.ResultsDirectory, cfg.CetCoreOnly);
-                Log($"CET: {J(cet.RootElement, "cet")} · 0-Engine mode: {J(cet.RootElement, "managedMode")}");
+                Log($"Installing standalone CET Runtime Profiler {ProfilerServices.CetVersion}...");
+                using var cet = await ProfilerServices.CallCetAsync("Install", cfg.GameDirectory, coreOnly: cfg.CetCoreOnly);
+                Log($"CET: {J(cet.RootElement, "cet")} · 0-Engine mode: {J(cet.RootElement, "managedMode")} · F11 {J(cet.RootElement, "f11Binding")}");
             }
         }
-
-        Log(await Task.Run(() => ProfilerServices.SyncCetProfilerControls(cfg.GameDirectory)));
-        Log(await Task.Run(() => ProfilerServices.ConfigureCetProfilerBinding(cfg.GameDirectory)));
 
         if (File.Exists(cfg.CapFrameXExe))
             Log(await Task.Run(() => ProfilerServices.ConfigureCapFrameXF11BestEffort(cfg.CapFrameXExe)));
@@ -1026,8 +1025,9 @@ internal sealed class MainForm : Form
 
         using var verify = await ProfilerServices.CallCetAsync("Status", cfg.GameDirectory);
         var vr = verify.RootElement;
-        if (J(vr, "cet") != "PROFILER_ACTIVE" || J(vr, "managed") != "True" || J(vr, "controlsPresent") != "True")
-            throw new InvalidOperationException("CET installation verification failed.");
+        if (J(vr, "cet") != "PROFILER_ACTIVE" || J(vr, "managed") != "True" ||
+            J(vr, "controlsPresent") != "True" || J(vr, "f11Binding") != "True")
+            throw new InvalidOperationException("Standalone CET installation verification failed.");
 
         await RefreshStatusAsync();
         if (!installVerified)
@@ -1045,34 +1045,55 @@ internal sealed class MainForm : Form
         Log("Installation VERIFIED. Continue to Measurement.");
     });
 
-    private async Task CollectAsync() => await RunBusy(async () =>
+    private async Task CollectAndCompareAsync() => await RunBusy(async () =>
     {
         if (!installVerified)
             throw new InvalidOperationException("Profiler installation is not verified. Return to INSTALL & VERIFY first.");
 
-        var result = await CaptureCollector.CollectAsync(cfg, Log);
-        cfg.LastCapture = result.CaptureDirectory;
+        var canResume = string.Equals(cfg.ResultStage, "collected", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture);
+
+        if (!canResume)
+        {
+            if (!measurementReady)
+                throw new InvalidOperationException("A complete fresh measurement was not detected yet. Finish the synchronized F11 capture in all three profilers, then return to Results.");
+
+            Log("Collecting standalone profiler outputs into one TOTAL capture...");
+            var result = await CaptureCollector.CollectAsync(cfg, Log);
+            cfg.LastCapture = result.CaptureDirectory;
+            cfg.ResultStage = "collected";
+            cfg.Save();
+
+            lastCaptureStatus.Text =
+                $"Collected ✓ · now comparing automatically\r\n" +
+                $"{Path.GetFileName(result.CaptureDirectory)} · sync precheck {result.SyncPrecheck}";
+        }
+        else
+        {
+            Log("Resuming previously collected capture; running comparison/packaging.");
+        }
+
+        var comparison = await CompareCollectedCaptureAsync();
+
+        cfg.ResultStage = "complete";
         cfg.CaptureResetUtc = DateTimeOffset.UtcNow;
         cfg.Save();
 
-        lastCaptureStatus.Text =
-            $"Collected ✓  {Path.GetFileName(result.CaptureDirectory)}\r\n" +
-            $"Sync precheck: {result.SyncPrecheck}" +
-            (result.StartDeltaMs is null ? "" : $" · start Δ {result.StartDeltaMs:F3} ms") +
-            (result.DurationDeltaMs is null ? "" : $" · duration Δ {result.DurationDeltaMs:F3} ms");
+        Log($"Complete result: {cfg.LastCapture}");
+        Log($"Full capture ZIP: {comparison.FullZip}");
 
         await RefreshStatusAsync();
-        ProfilerServices.OpenPath(result.CaptureDirectory);
 
-        MessageBox.Show(this,
-            $"Collected successfully.\r\n\r\n{Path.GetFileName(result.CaptureDirectory)}\r\n\r\nSync precheck: {result.SyncPrecheck}\r\n\r\nThe capture folder has been opened. Next: click COMPARE RESULTS.",
-            ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        // Only open outputs after collection + comparison + packaging are complete.
+        OpenResultDirectory();
+        if (File.Exists(comparison.Report))
+            ProfilerServices.OpenPath(comparison.Report);
     });
 
-    private async Task CompareAsync() => await RunBusy(async () =>
+    private async Task<(string Report, string FullZip)> CompareCollectedCaptureAsync()
     {
         if (string.IsNullOrWhiteSpace(cfg.LastCapture) || !Directory.Exists(cfg.LastCapture))
-            throw new InvalidOperationException("No collected capture selected. Run COLLECT RESULTS first.");
+            throw new InvalidOperationException("No collected capture is available.");
 
         var raw = Path.Combine(cfg.LastCapture, "Raw");
         if (!Directory.Exists(raw)) throw new InvalidOperationException("The selected capture has no Raw folder.");
@@ -1109,13 +1130,8 @@ internal sealed class MainForm : Form
         await Task.Run(() => ProfilerServices.CreateDirectoryZip(cfg.LastCapture, tempZip));
         File.Move(tempZip, fullZip, true);
 
-        Log($"Portable full package stored inside capture folder: {fullZip}");
-        ProfilerServices.OpenPath(result.Report);
-
-        MessageBox.Show(this,
-            $"Correlation complete.\r\n\r\nReport:\r\n{result.Report}\r\n\r\nFull capture ZIP:\r\n{fullZip}",
-            ProfilerServices.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
-    });
+        return (result.Report, fullZip);
+    }
 
     private async Task ResetCaptureStateAsync()
     {
