@@ -7,8 +7,7 @@
     [string]$GameRoot,
 
     [string]$ResultsRoot = "",
-    [switch]$CoreProfilerOnly,
-    [switch]$DiscardLiveResultsOnRestore
+    [switch]$CoreProfilerOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +18,7 @@ $PayloadRoot = Join-Path $PackageRoot "PAYLOAD"
 if ([string]::IsNullOrWhiteSpace($ResultsRoot)) {
     $ResultsRoot = Join-Path $PackageRoot "RESULTS"
 }
+$F11BindCode = 34339947158700032
 
 function Get-Sha256([string]$Path) {
     if (!(Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
@@ -47,6 +47,7 @@ function Get-Paths([string]$Root) {
         ZeroScheduler = Join-Path $zeroRoot "modules\Scheduler.lua"
         ZeroAdaptiveScheduler = Join-Path $zeroRoot "modules\CETProfilerScheduler.lua"
         Controls = Join-Path $mods "CETProfilerControls"
+        Bindings = Join-Path $cetRoot "bindings.json"
         StateRoot = $stateRoot
         StateFile = Join-Path $stateRoot "state.json"
         BackupAsi = Join-Path $stateRoot "cyber_engine_tweaks.ORIGINAL.asi"
@@ -54,7 +55,6 @@ function Get-Paths([string]$Root) {
         BackupZeroInit = Join-Path $stateRoot "0-Engine.init.ORIGINAL.lua"
         BackupZeroScheduler = Join-Path $stateRoot "0-Engine.Scheduler.ORIGINAL.lua"
         BackupZeroAdaptiveScheduler = Join-Path $stateRoot "0-Engine.CETProfilerScheduler.ORIGINAL.lua"
-        BackupControlsRoot = Join-Path $stateRoot "CETProfilerControls.ORIGINAL"
     }
 }
 
@@ -89,6 +89,74 @@ function Get-State($Paths) {
 function Save-State($Paths, $State) {
     New-Item -ItemType Directory -Path $Paths.StateRoot -Force | Out-Null
     $State | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $Paths.StateFile -Encoding UTF8
+}
+
+function Read-BindingsObject($Paths) {
+    if (!(Test-Path -LiteralPath $Paths.Bindings -PathType Leaf)) { return [pscustomobject]@{} }
+    try {
+        $root = Get-Content -LiteralPath $Paths.Bindings -Raw | ConvertFrom-Json
+        if ($null -eq $root) { return [pscustomobject]@{} }
+        return $root
+    }
+    catch { throw "CET bindings.json is invalid JSON. No binding changes were made." }
+}
+
+function Get-ProfilerBindingSnapshot($Paths) {
+    $fileExisted = Test-Path -LiteralPath $Paths.Bindings -PathType Leaf
+    $root = Read-BindingsObject $Paths
+    $prop = $root.PSObject.Properties["CETProfilerControls"]
+    $hadNode = $null -ne $prop
+    $nodeJson = if ($hadNode) { $prop.Value | ConvertTo-Json -Depth 20 -Compress } else { "" }
+    return [ordered]@{
+        fileExistedBefore = [bool]$fileExisted
+        hadNode = [bool]$hadNode
+        originalNodeJson = [string]$nodeJson
+        installedToggle = [Int64]$F11BindCode
+    }
+}
+
+function Set-ProfilerDefaultBinding($Paths) {
+    $root = Read-BindingsObject $Paths
+    $prop = $root.PSObject.Properties["CETProfilerControls"]
+    $node = if ($null -ne $prop -and $null -ne $prop.Value) { $prop.Value } else { [pscustomobject]@{} }
+    $node | Add-Member -NotePropertyName "CETProfiler_Toggle" -NotePropertyValue ([Int64]$F11BindCode) -Force
+    $dump = $node.PSObject.Properties["CETProfiler_Dump"]
+    if ($null -ne $dump) { $node.PSObject.Properties.Remove("CETProfiler_Dump") }
+    $root | Add-Member -NotePropertyName "CETProfilerControls" -NotePropertyValue $node -Force
+    $root | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Paths.Bindings -Encoding UTF8
+}
+
+function Test-ProfilerF11Binding($Paths) {
+    if (!(Test-Path -LiteralPath $Paths.Bindings -PathType Leaf)) { return $false }
+    try {
+        $root = Read-BindingsObject $Paths
+        $prop = $root.PSObject.Properties["CETProfilerControls"]
+        if ($null -eq $prop -or $null -eq $prop.Value) { return $false }
+        $toggle = $prop.Value.PSObject.Properties["CETProfiler_Toggle"]
+        if ($null -eq $toggle) { return $false }
+        return ([Int64]$toggle.Value -eq [Int64]$F11BindCode)
+    }
+    catch { return $false }
+}
+
+function Restore-ProfilerBinding($Paths, $BindingState) {
+    if ($null -eq $BindingState) { return }
+    $root = Read-BindingsObject $Paths
+    $existing = $root.PSObject.Properties["CETProfilerControls"]
+    if ($null -ne $existing) { $root.PSObject.Properties.Remove("CETProfilerControls") }
+
+    if ([bool]$BindingState.hadNode) {
+        $node = ([string]$BindingState.originalNodeJson | ConvertFrom-Json)
+        $root | Add-Member -NotePropertyName "CETProfilerControls" -NotePropertyValue $node -Force
+    }
+
+    $props = @($root.PSObject.Properties).Count
+    if (![bool]$BindingState.fileExistedBefore -and $props -eq 0) {
+        if (Test-Path -LiteralPath $Paths.Bindings -PathType Leaf) { Remove-Item -LiteralPath $Paths.Bindings -Force }
+    }
+    else {
+        $root | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Paths.Bindings -Encoding UTF8
+    }
 }
 
 function Test-GameRoot([string]$Root) {
@@ -417,7 +485,6 @@ function Install-Profiler($Paths, [bool]$CoreProfilerOnly) {
     if (!(Test-Path -LiteralPath $controlsSource -PathType Container)) { throw "Bundled CETProfilerControls is missing." }
 
     $zeroPresentBefore = Test-Path -LiteralPath $Paths.ZeroInit -PathType Leaf
-    $controlsPresentBefore = Test-Path -LiteralPath $Paths.Controls -PathType Container
     if ($zeroPresentBefore -and !$CoreProfilerOnly) {
         $preInitState = Get-ZeroInitState $Paths
         if ($preInitState.Kind -eq "unsafe") {
@@ -440,12 +507,8 @@ function Install-Profiler($Paths, [bool]$CoreProfilerOnly) {
             scheduler = [ordered]@{ mode = "not-applicable"; originalHash = $null; installedHash = $null }
             adaptiveScheduler = [ordered]@{ mode = "not-applicable"; originalHash = $null; installedHash = $null }
         }
-        controls = [ordered]@{
-            mode = $(if ($controlsPresentBefore) { "replaced" } else { "added" })
-            presentBefore = $controlsPresentBefore
-            originalFingerprint = $null
-            installedFingerprint = $null
-        }
+        controls = [ordered]@{ mode = "profiler-owned" }
+        binding = Get-ProfilerBindingSnapshot $Paths
     }
 
     try {
@@ -553,31 +616,19 @@ function Install-Profiler($Paths, [bool]$CoreProfilerOnly) {
             }
         }
 
-        if ($controlsPresentBefore) {
-            $state.controls.originalFingerprint = Get-DirectoryFingerprint $Paths.Controls
-            Copy-DirectoryExact $Paths.Controls $Paths.BackupControlsRoot
-            if ((Get-DirectoryFingerprint $Paths.BackupControlsRoot) -ne $state.controls.originalFingerprint) {
-                throw "Existing CETProfilerControls backup verification failed."
-            }
-        }
-
         Copy-DirectoryExact $controlsSource $Paths.Controls
         if (!(Test-Path -LiteralPath (Join-Path $Paths.Controls "init.lua") -PathType Leaf)) {
             throw "CETProfilerControls deployment verification failed."
         }
-        $state.controls.installedFingerprint = Get-DirectoryFingerprint $Paths.Controls
+
+        Set-ProfilerDefaultBinding $Paths
+        if (!(Test-ProfilerF11Binding $Paths)) { throw "CETProfilerControls F11 binding verification failed." }
 
         Save-State $Paths $state
     }
     catch {
-        try {
-            if ([string]$state.controls.mode -eq "replaced" -and (Test-Path -LiteralPath $Paths.BackupControlsRoot -PathType Container)) {
-                Copy-DirectoryExact $Paths.BackupControlsRoot $Paths.Controls
-            }
-            elseif (Test-Path -LiteralPath $Paths.Controls) {
-                Remove-Item -LiteralPath $Paths.Controls -Recurse -Force
-            }
-        } catch {}
+        try { if (Test-Path -LiteralPath $Paths.Controls) { Remove-Item -LiteralPath $Paths.Controls -Recurse -Force } } catch {}
+        try { Restore-ProfilerBinding $Paths $state.binding } catch {}
 
         try {
             if ($state.zeroEngine.adaptiveScheduler.mode -eq "replaced" -and (Test-Path -LiteralPath $Paths.BackupZeroAdaptiveScheduler)) {
@@ -620,7 +671,7 @@ function Install-Profiler($Paths, [bool]$CoreProfilerOnly) {
     }
 }
 
-function Restore-Profiler($Paths, [bool]$DiscardLiveResults = $false) {
+function Restore-Profiler($Paths) {
     Assert-GameClosed
     $state = Get-State $Paths
     if ($null -eq $state) { throw "No managed profiler installation state was found." }
@@ -684,38 +735,7 @@ function Restore-Profiler($Paths, [bool]$DiscardLiveResults = $false) {
         }
     }
 
-    $controlsMode = [string]$state.controls.mode
-    $controlsInstalledFingerprint = [string]$state.controls.installedFingerprint
-    if ($controlsMode -eq "replaced") {
-        if (!(Test-Path -LiteralPath $Paths.BackupControlsRoot -PathType Container)) {
-            throw "Original CETProfilerControls backup is missing. Restore aborted before changing anything."
-        }
-        $expectedOriginalControls = [string]$state.controls.originalFingerprint
-        if ($expectedOriginalControls -and (Get-DirectoryFingerprint $Paths.BackupControlsRoot) -ne $expectedOriginalControls) {
-            throw "Original CETProfilerControls backup fingerprint is wrong. Restore aborted before changing anything."
-        }
-        if ((Test-Path -LiteralPath $Paths.Controls -PathType Container) -and $controlsInstalledFingerprint) {
-            $curControls = Get-DirectoryFingerprint $Paths.Controls
-            if ($curControls -ne $controlsInstalledFingerprint -and (!$expectedOriginalControls -or $curControls -ne $expectedOriginalControls)) {
-                throw "CETProfilerControls changed after profiler installation. Restore aborted to avoid overwriting user changes."
-            }
-        }
-    }
-    elseif (($controlsMode -eq "added" -or $controlsMode -eq "profiler-owned") -and
-            (Test-Path -LiteralPath $Paths.Controls -PathType Container) -and $controlsInstalledFingerprint) {
-        if ((Get-DirectoryFingerprint $Paths.Controls) -ne $controlsInstalledFingerprint) {
-            throw "Profiler-added CETProfilerControls changed after installation. Restore aborted to avoid deleting user changes."
-        }
-    }
-
-    $archived = $null
-    $discardedLiveResultCount = 0
-    if ($DiscardLiveResults) {
-        $discardedLiveResultCount = Remove-LiveResults $Paths
-    }
-    else {
-        $archived = Collect-ResultsInternal $Paths $true
-    }
+    $archived = Collect-ResultsInternal $Paths $true
 
     if ([string]$state.asi.mode -eq "replaced") {
         if ((Get-Sha256 $Paths.LiveAsi) -eq $profilerHash) {
@@ -759,24 +779,14 @@ function Restore-Profiler($Paths, [bool]$DiscardLiveResults = $false) {
         if (Test-Path -LiteralPath $Paths.ZeroAdaptiveScheduler -PathType Leaf) { Remove-Item -LiteralPath $Paths.ZeroAdaptiveScheduler -Force }
     }
 
-    if ($controlsMode -eq "replaced") {
-        Copy-DirectoryExact $Paths.BackupControlsRoot $Paths.Controls
-        $expectedOriginalControls = [string]$state.controls.originalFingerprint
-        if ($expectedOriginalControls -and (Get-DirectoryFingerprint $Paths.Controls) -ne $expectedOriginalControls) {
-            throw "CETProfilerControls restoration failed verification."
-        }
-    }
-    elseif ($controlsMode -eq "added" -or $controlsMode -eq "profiler-owned") {
-        if (Test-Path -LiteralPath $Paths.Controls) {
-            Remove-Item -LiteralPath $Paths.Controls -Recurse -Force
-        }
+    if (Test-Path -LiteralPath $Paths.Controls) {
+        Remove-Item -LiteralPath $Paths.Controls -Recurse -Force
     }
 
+    Restore-ProfilerBinding $Paths $state.binding
+
     Remove-Item -LiteralPath $Paths.StateRoot -Recurse -Force
-    return [pscustomobject]@{
-        archived = $archived
-        discardedLiveResultCount = $discardedLiveResultCount
-    }
+    return $archived
 }
 
 function Get-TotalProfilerStatus($Paths) {
@@ -817,7 +827,9 @@ function Get-TotalProfilerStatus($Paths) {
         managed = ($null -ne $state)
         managedMode = $(if ($null -ne $state) { [string]$state.zeroEngine.mode } else { "" })
         controlsPresent = (Test-Path -LiteralPath $Paths.Controls -PathType Container)
+        f11Binding = (Test-ProfilerF11Binding $Paths)
         liveResultCount = @(Get-LiveResults $Paths).Count
+        resultsRoot = [string]$ResultsRoot
         state = $state
     }
 }
@@ -845,11 +857,10 @@ try {
             [ordered]@{ ok=$true; archived=$(if ($dest) { [string]$dest } else { "" }); status=(Get-TotalProfilerStatus $p) } | ConvertTo-Json -Depth 12 -Compress
         }
         "Restore" {
-            $restore = Restore-Profiler $p ([bool]$DiscardLiveResultsOnRestore)
+            $archived = Restore-Profiler $p
             [ordered]@{
                 ok = $true
-                archived = $(if ($restore.archived) { [string]$restore.archived } else { "" })
-                discardedLiveResultCount = [int]$restore.discardedLiveResultCount
+                archived = $(if ($archived) { [string]$archived } else { "" })
                 status = (Get-TotalProfilerStatus $p)
             } | ConvertTo-Json -Depth 12 -Compress
         }
