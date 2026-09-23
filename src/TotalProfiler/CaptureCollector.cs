@@ -19,14 +19,14 @@ internal static class CaptureCollector
         var gm = ProfilerServices.ReadGrspMeta(grsp);
         log?.Invoke($"GRSP found: {Path.GetFileName(grsp)} · {gm.DurationMs / 1000:F3}s");
 
-        var staging = Path.Combine(cfg.ResultsDirectory, ".staging_cet");
-        Directory.CreateDirectory(staging);
-        using var cetJson = await ProfilerServices.CallCetAsync("Collect", cfg.GameDirectory, staging);
+        // CET owns its standalone output path. TOTAL invokes the standalone Collect
+        // action unchanged, then copies that completed CET result into the combined package.
+        using var cetJson = await ProfilerServices.CallCetAsync("Collect", cfg.GameDirectory);
         if (!cetJson.RootElement.TryGetProperty("destination", out var destEl)) throw new InvalidOperationException("CET manager did not return a collection destination.");
         var cet = destEl.GetString() ?? "";
         if (!Directory.Exists(cet)) throw new InvalidOperationException("CET manager reported collection success but its archive folder was not found.");
         var cm = ProfilerServices.ReadCetMeta(cet);
-        log?.Invoke($"CET found/exported: {Path.GetFileName(cet)} · {cm.DurationMs / 1000:F3}s");
+        log?.Invoke($"CET standalone result: {Path.GetFileName(cet)} · {cm.DurationMs / 1000:F3}s");
 
         double target = gm.DurationMs;
         if (cm.DurationMs > 0 && target > 0) target = (target + cm.DurationMs) / 2.0;
@@ -61,16 +61,7 @@ internal static class CaptureCollector
         if (!File.Exists(capDstFile))
             throw new InvalidOperationException("CapFrameX copy verification failed.");
 
-        try
-        {
-            Directory.Delete(cet, true);
-            if (Directory.Exists(staging) && !Directory.EnumerateFileSystemEntries(staging).Any()) Directory.Delete(staging);
-            log?.Invoke("CET live profiler CSVs cleared from the game folder after verified collection.");
-        }
-        catch (Exception ex)
-        {
-            log?.Invoke("CET staging cleanup warning: " + ex.Message);
-        }
+        log?.Invoke("CET standalone result left in its profiler-owned RESULTS folder.");
 
         double? sd = gm.StartUnixMs > 0 && cm.StartUnixMs > 0 ? cm.StartUnixMs - gm.StartUnixMs : null;
         double? dd = gm.DurationMs > 0 && cm.DurationMs > 0 ? cm.DurationMs - gm.DurationMs : null;
@@ -109,20 +100,7 @@ internal static class CaptureCollector
         };
         File.WriteAllText(Path.Combine(capture, "CaptureManifest.json"), JsonSerializer.Serialize(manifest, ProfilerServices.JsonOpts) + Environment.NewLine);
 
-        try
-        {
-            var grspResultsRoot = Path.Combine(cfg.GameDirectory, "red4ext", "plugins", "redscript_profiler_alpha", "RESULTS");
-            if (Directory.Exists(grspResultsRoot))
-            {
-                foreach (var dir in Directory.EnumerateDirectories(grspResultsRoot)) Directory.Delete(dir, true);
-                foreach (var file in Directory.EnumerateFiles(grspResultsRoot)) File.Delete(file);
-            }
-            log?.Invoke("GRSP game-side RESULTS cleared after verified collection.");
-        }
-        catch (Exception ex)
-        {
-            log?.Invoke("GRSP game-side cleanup warning: " + ex.Message);
-        }
+        log?.Invoke("GRSP standalone result left in its profiler-owned RESULTS folder.");
 
         log?.Invoke($"Collected into: {capture}");
         if (sd is not null) log?.Invoke($"GRSP↔CET START delta: {sd:F3} ms");
