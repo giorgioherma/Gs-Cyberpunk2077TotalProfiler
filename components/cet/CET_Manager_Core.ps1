@@ -56,6 +56,9 @@ function Get-Paths([string]$Root) {
         BackupZeroInit = Join-Path $stateRoot "0-Engine.init.ORIGINAL.lua"
         BackupZeroScheduler = Join-Path $stateRoot "0-Engine.Scheduler.ORIGINAL.lua"
         BackupZeroAdaptiveScheduler = Join-Path $stateRoot "0-Engine.CETProfilerScheduler.ORIGINAL.lua"
+        # Compatibility only: TOTAL Profiler 0.2.19 could snapshot a pre-existing
+        # CETProfilerControls folder here. New standalone installs own this namespace.
+        LegacyBackupControlsRoot = Join-Path $stateRoot "CETProfilerControls.ORIGINAL"
     }
 }
 
@@ -802,8 +805,40 @@ function Restore-Profiler($Paths) {
         if (Test-Path -LiteralPath $Paths.ZeroAdaptiveScheduler -PathType Leaf) { Remove-Item -LiteralPath $Paths.ZeroAdaptiveScheduler -Force }
     }
 
-    if (Test-Path -LiteralPath $Paths.Controls) {
-        Remove-Item -LiteralPath $Paths.Controls -Recurse -Force
+    # New standalone state treats CETProfilerControls as profiler-owned. A
+    # TOTAL Profiler 0.2.19 state may instead say "replaced" and carry an exact
+    # backup of a pre-existing controls directory. Honor that legacy transaction
+    # so upgrading the manager cannot destroy the user's prior folder.
+    $legacyControlsMode = ""
+    if ($null -ne $state.controls -and $null -ne $state.controls.mode) {
+        $legacyControlsMode = [string]$state.controls.mode
+    }
+
+    if ($legacyControlsMode -eq "replaced") {
+        if (!(Test-Path -LiteralPath $Paths.LegacyBackupControlsRoot -PathType Container)) {
+            throw "Legacy CETProfilerControls backup is missing. Restore aborted before removing the live controls folder."
+        }
+
+        $expectedControlsFingerprint = ""
+        if ($null -ne $state.controls.originalFingerprint) {
+            $expectedControlsFingerprint = [string]$state.controls.originalFingerprint
+        }
+        if ($expectedControlsFingerprint -and
+            (Get-DirectoryFingerprint $Paths.LegacyBackupControlsRoot) -ne $expectedControlsFingerprint) {
+            throw "Legacy CETProfilerControls backup fingerprint is wrong. Restore aborted."
+        }
+
+        Copy-DirectoryExact $Paths.LegacyBackupControlsRoot $Paths.Controls
+
+        if ($expectedControlsFingerprint -and
+            (Get-DirectoryFingerprint $Paths.Controls) -ne $expectedControlsFingerprint) {
+            throw "Legacy CETProfilerControls restoration failed verification."
+        }
+    }
+    else {
+        if (Test-Path -LiteralPath $Paths.Controls) {
+            Remove-Item -LiteralPath $Paths.Controls -Recurse -Force
+        }
     }
 
     Restore-ProfilerBinding $Paths $state.binding
