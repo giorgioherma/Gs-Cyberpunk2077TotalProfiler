@@ -183,7 +183,7 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICE.txt stage\THIRD_PARTY_NOTICE.txt
           @(
             "G's Cyberpunk 2077 TOTAL Profiler"
-            'Version: 0.2.19'
+            'Version: 0.2.20'
             "Git commit: $env:GITHUB_SHA"
             'Runtime: .NET 8 self-contained win-x64'
             'Packaging: normal self-contained .NET files; NOT PyInstaller; NOT self-extracting'
@@ -224,7 +224,7 @@ jobs:
         run: |
           if ([string]::IsNullOrWhiteSpace($env:ARTIFACT_ID)) { throw 'upload-artifact did not return an artifact id.' }
 
-          $asset = 'Gs_Cyberpunk2077_TOTAL_Profiler_v0.2.19.zip'
+          $asset = 'Gs_Cyberpunk2077_TOTAL_Profiler_v0.2.20.zip'
           $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/artifacts/$env:ARTIFACT_ID/zip"
 
           curl.exe -fL -H "Authorization: Bearer $env:GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" $uri -o $asset
@@ -247,13 +247,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v0.2.19-public'
-          $title = "G's Cyberpunk 2077 TOTAL Profiler v0.2.19"
+          $tag = 'v0.2.20-public'
+          $title = "G's Cyberpunk 2077 TOTAL Profiler v0.2.20"
           $asset = $env:PUBLIC_ASSET
           $shaAsset = "$asset.sha256.txt"
 
           $notes = @(
-            "Public Windows build of G's Cyberpunk 2077 TOTAL Profiler v0.2.19."
+            "Public Windows build of G's Cyberpunk 2077 TOTAL Profiler v0.2.20."
             ""
             "Distribution note:"
             "- C# / .NET 8 self-contained win-x64"
