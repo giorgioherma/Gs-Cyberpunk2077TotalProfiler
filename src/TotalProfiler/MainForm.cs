@@ -39,7 +39,7 @@ internal sealed class MainForm : Form
     private readonly Button installButton = new();
     private readonly Button installNext = new();
     private readonly Button collectButton = new();
-    private readonly Button compareButton = new();
+    private readonly Button openResultButton = new();
     private readonly Button restoreButton = new();
 
     private readonly Panel setupPage = new();
@@ -55,6 +55,7 @@ internal sealed class MainForm : Form
     private bool installVerified;
     private bool cetBindingVerified;
     private bool capSettingsVerified;
+    private bool measurementReady;
     private bool syncingScenarioNames;
     private int currentPage;
 
@@ -416,7 +417,7 @@ internal sealed class MainForm : Form
                 "1. Load a save.\r\n" +
                 "2. Press F11 to start capture (temporarily unbind any other bindings from F11).\r\n" +
                 "3. Press F11 when finished.\r\n" +
-                "4. Return to this page."
+                "4. Return to this page and proceed to Results."
         });
 
         var launchFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = new Padding(0, 10, 0, 5) };
@@ -465,28 +466,24 @@ internal sealed class MainForm : Form
     {
         var body = PageBody(resultsPage);
 
-        body.Controls.Add(PageHeading("STEP 4 — RESULTS", "Collect the three profiler outputs, compare them, or open the latest result."));
+        body.Controls.Add(PageHeading("STEP 4 — RESULTS", "Build the complete combined result from the measurement you just finished."));
 
         var results = Group("Results");
-        var rg = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 5 };
+        var rg = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 4 };
 
         var resultActions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
-        collectButton.Text = "COLLECT RESULTS";
-        collectButton.Width = 160;
-        collectButton.Height = 38;
-        collectButton.Click += async (_, _) => await CollectAsync();
+        collectButton.Text = "COLLECT & COMPARE RESULTS";
+        collectButton.Width = 220;
+        collectButton.Height = 40;
+        collectButton.Click += async (_, _) => await CollectAndCompareAsync();
 
-        compareButton.Text = "COMPARE RESULTS";
-        compareButton.Width = 165;
-        compareButton.Height = 38;
-        compareButton.Click += async (_, _) => await CompareAsync();
-
-        var openLatest = new Button { Text = "OPEN LAST", Width = 115, Height = 38 };
-        openLatest.Click += (_, _) => OpenLatest();
+        openResultButton.Text = "OPEN RESULT DIRECTORY";
+        openResultButton.Width = 190;
+        openResultButton.Height = 40;
+        openResultButton.Click += (_, _) => OpenResultDirectory();
 
         resultActions.Controls.Add(collectButton);
-        resultActions.Controls.Add(compareButton);
-        resultActions.Controls.Add(openLatest);
+        resultActions.Controls.Add(openResultButton);
         rg.Controls.Add(resultActions);
 
         lastCaptureStatus.AutoSize = true;
@@ -494,26 +491,12 @@ internal sealed class MainForm : Form
         lastCaptureStatus.Margin = new Padding(0, 10, 0, 2);
         rg.Controls.Add(lastCaptureStatus);
 
-        resultsLocationStatus.AutoSize = true;
-        resultsLocationStatus.MaximumSize = new Size(760, 0);
-        resultsLocationStatus.ForeColor = SystemColors.GrayText;
-        resultsLocationStatus.Margin = new Padding(0, 4, 0, 4);
-        rg.Controls.Add(resultsLocationStatus);
-
-        checkResultsLink.Text = "CHECK RESULTS HERE!";
+        checkResultsLink.Text = "View full capture overview";
         checkResultsLink.AutoSize = true;
         checkResultsLink.Font = new Font("Segoe UI Semibold", 10F);
         checkResultsLink.Margin = new Padding(0, 8, 0, 8);
-        checkResultsLink.LinkClicked += (_, _) => OpenLatestReportOrFolder();
+        checkResultsLink.LinkClicked += (_, _) => OpenFullCaptureOverview();
         rg.Controls.Add(checkResultsLink);
-
-        rg.Controls.Add(new Label
-        {
-            AutoSize = true,
-            MaximumSize = new Size(760, 0),
-            ForeColor = SystemColors.GrayText,
-            Text = "COLLECT RESULTS copies the profiler outputs into the TOTAL Profiler Results folder and opens that capture folder so the files are visible immediately."
-        });
 
         results.Controls.Add(rg);
         body.Controls.Add(results);
@@ -524,7 +507,7 @@ internal sealed class MainForm : Form
             MaximumSize = new Size(780, 0),
             ForeColor = SystemColors.GrayText,
             Margin = new Padding(0, 14, 0, 4),
-            Text = "RESTORE GAME FILES returns every TOTAL Profiler-managed game file and configuration to its original state. Any uncollected profiler results will be lost. Already-collected Results stay."
+            Text = "RESTORE GAME FILES returns every profiler-managed game file and configuration to its original state. Profiler-owned result folders are left to their own profiler lifecycle; already-built TOTAL Results stay."
         };
         body.Controls.Add(restoreInfo);
 
@@ -799,8 +782,12 @@ internal sealed class MainForm : Form
         setupNext.Enabled = !busy && gameValid;
         installButton.Enabled = !busy && gameValid;
         installNext.Enabled = !busy && installVerified;
-        collectButton.Enabled = !busy && installVerified;
-        compareButton.Enabled = !busy && !string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture);
+        var collectedRetry = string.Equals(cfg.ResultStage, "collected", StringComparison.OrdinalIgnoreCase) &&
+                             !string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture);
+        var complete = HasCompletedResult();
+        collectButton.Enabled = !busy && installVerified && !complete && (measurementReady || collectedRetry);
+        openResultButton.Enabled = !busy && complete;
+        checkResultsLink.Enabled = !busy && complete;
         restoreButton.Enabled = !busy && gameValid;
     }
 
