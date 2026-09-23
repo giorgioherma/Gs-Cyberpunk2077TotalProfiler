@@ -48,6 +48,7 @@ function Get-Paths([string]$Root) {
         ZeroAdaptiveScheduler = Join-Path $zeroRoot "modules\CETProfilerScheduler.lua"
         Controls = Join-Path $mods "CETProfilerControls"
         Bindings = Join-Path $cetRoot "bindings.json"
+        LegacyTotalBindingState = Join-Path $cetRoot ".gctp_cet_profiler_binding_state.json"
         StateRoot = $stateRoot
         StateFile = Join-Path $stateRoot "state.json"
         BackupAsi = Join-Path $stateRoot "cyber_engine_tweaks.ORIGINAL.asi"
@@ -140,22 +141,44 @@ function Test-ProfilerF11Binding($Paths) {
 }
 
 function Restore-ProfilerBinding($Paths, $BindingState) {
-    if ($null -eq $BindingState) { return }
+    # alpha6c stores binding rollback data inside the persistent CET profiler state.
+    # TOTAL Profiler <=0.2.19 used a separate state file; consume that once so an
+    # existing managed install can still be restored correctly after upgrading.
+    if ($null -eq $BindingState -and (Test-Path -LiteralPath $Paths.LegacyTotalBindingState -PathType Leaf)) {
+        try {
+            $legacy = Get-Content -LiteralPath $Paths.LegacyTotalBindingState -Raw | ConvertFrom-Json
+            $legacyNodeJson = if ([bool]$legacy.hadNode -and $null -ne $legacy.node) {
+                $legacy.node | ConvertTo-Json -Depth 20 -Compress
+            } else { "" }
+            $BindingState = [pscustomobject]@{
+                fileExistedBefore = $(if ($null -ne $legacy.bindingsFileExisted) { [bool]$legacy.bindingsFileExisted } else { $true })
+                hadNode = [bool]$legacy.hadNode
+                originalNodeJson = [string]$legacyNodeJson
+            }
+        }
+        catch { throw "Legacy TOTAL Profiler CET binding state is invalid; binding restore was not attempted." }
+    }
+
     $root = Read-BindingsObject $Paths
     $existing = $root.PSObject.Properties["CETProfilerControls"]
     if ($null -ne $existing) { $root.PSObject.Properties.Remove("CETProfilerControls") }
 
-    if ([bool]$BindingState.hadNode) {
+    if ($null -ne $BindingState -and [bool]$BindingState.hadNode) {
         $node = ([string]$BindingState.originalNodeJson | ConvertFrom-Json)
         $root | Add-Member -NotePropertyName "CETProfilerControls" -NotePropertyValue $node -Force
     }
 
+    $fileExistedBefore = if ($null -ne $BindingState) { [bool]$BindingState.fileExistedBefore } else { $true }
     $props = @($root.PSObject.Properties).Count
-    if (![bool]$BindingState.fileExistedBefore -and $props -eq 0) {
+    if (!$fileExistedBefore -and $props -eq 0) {
         if (Test-Path -LiteralPath $Paths.Bindings -PathType Leaf) { Remove-Item -LiteralPath $Paths.Bindings -Force }
     }
     else {
         $root | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Paths.Bindings -Encoding UTF8
+    }
+
+    if (Test-Path -LiteralPath $Paths.LegacyTotalBindingState -PathType Leaf) {
+        Remove-Item -LiteralPath $Paths.LegacyTotalBindingState -Force
     }
 }
 
