@@ -1,99 +1,72 @@
-CET Runtime Profiler v3.0.0-alpha6b - ADAPTIVE 0-ENGINE / CORE MODE TEST
-============================================================================
+CET Runtime Profiler v3.0.0-alpha6c
+=====================================
 
-PURPOSE
+Standalone CET Runtime Profiler for Cyberpunk 2077.
+
+This standalone package is also the CET dependency consumed by G's Cyberpunk 2077 TOTAL Profiler. The profiler payload, install/restore engine, persistent state and result collection behavior are the same in both uses.
+
+CAPTURE
 -------
-Alpha6b keeps the proven PASS6 architecture where 0-Engine owns Scheduler when the
-user already has that integration. It also supports unknown/custom 0-Engine versions
-without pretending that merely finding the folder proves compatibility.
 
-IMPORTANT STATUS CHANGE
------------------------
-The Manager reports `FOUND - UNVERIFIED` for 0-Engine. It then decides which Scheduler
-integration path is available.
+The Manager configures one CET input to F11 by default:
 
-THREE 0-ENGINE PATHS
---------------------
-1) EXISTING PASS / SCHEDULER-INTEGRATED 0-ENGINE
-   - init.lua stays byte-for-byte untouched.
-   - the existing modules/Scheduler.lua is temporarily replaced only when needed.
-   - restore puts the exact original Scheduler.lua back.
+F11 #1 -> START a fresh measurement  
+F11 #2 -> STOP the measurement and automatically export CSV results
 
-2) RECOGNIZED UNINTEGRATED / CUSTOM 0-ENGINE
-   - the Manager copies and hashes the user's exact init.lua.
-   - it identifies the user's final standalone `return Engine` export anchor.
-   - it injects only the temporary Scheduler bridge into THEIR init.lua.
-   - it adds `modules/CETProfilerScheduler.lua`, a unique profiler-owned module name.
-   - it does NOT overwrite or collide with any unrelated custom `modules/Scheduler.lua`.
-   - restore puts the exact original init.lua back and removes/restores the unique
-     profiler module transactionally.
+There is no separate CREATE CSV / F12 action.
 
-3) CORE PROFILER MODE - LEAVE 0-ENGINE UNTOUCHED
-   Check `Core profiler only - leave 0-Engine untouched` if Scheduler integration fails
-   or the user's 0-Engine structure is not recognized.
+The profiler-owned CET binding state is stored with the persistent install transaction in:
 
-   In this mode:
-   - 0-Engine remains in the CET mods folder.
-   - 0-Engine loads normally exactly as the user installed it.
-   - the Manager does NOT patch init.lua.
-   - the Manager does NOT replace/add Scheduler.lua.
-   - the Manager does NOT add CETProfilerScheduler.lua.
-   - the native CET profiler ASI and CETProfilerControls are still installed.
-   - normal/core CET profiling remains available.
-   - Scheduler-specific attribution is available only if the user's existing setup
-     already provides a profiler-aware Scheduler integration.
+bin\x64\plugins\.cet_runtime_profiler\
 
-   This mode is intentionally a non-invasive fallback. It does not attempt to repair a
-   broken 0-Engine. If 0-Engine itself fails, that failure remains visible in the user's
-   CET logs while the core profiler can still run independently.
+That state survives closing or restarting the standalone Manager or TOTAL Profiler. Restore returns the previous CETProfilerControls binding state as well as the managed CET / 0-Engine files.
 
-WHY CORE MODE DOES NOT REMOVE 0-ENGINE
---------------------------------------
-Removing 0-Engine would also disable any optimization/client mods that depend on it,
-which would change the runtime being measured. Core mode therefore leaves the user's
-actual mod stack intact and merely skips our Scheduler integration.
+RESULTS
+-------
 
-ADAPTIVE SAFETY RULE
---------------------
-The Manager does not blindly modify arbitrary Lua. Adaptive injection is offered only
-when it can identify both an Engine table and a final standalone `return Engine`. If
-that structure is not recognized, normal Scheduler integration is disabled and the UI
-asks the user to choose Core profiler mode instead.
+The native profiler writes its live CSVs in its normal CET location. The standalone Manager's COLLECT RESULTS / CLEAR LIVE action copies and SHA256-verifies them into this package's own:
 
-TRANSACTION RULE
-----------------
-Every original file that the Manager changes is backed up before replacement and
-verified. Restore reverses only what the Manager changed. In Core profiler mode,
-0-Engine is never part of the transaction because it is never modified.
+RESULTS\
 
-CETProfilerControls remains temporary profiler-owned UI and is always deleted on
-restore regardless of key assignments.
+and only then clears the live CSVs.
 
-RESULTS / REFRESH
------------------
-RESULTS stay beside the Profiler Manager package. Live CSVs are copied, SHA256-verified
-and then cleared. Status refresh is event-driven on window activation plus a manual
-REFRESH STATUS button; there is no polling timer.
+TOTAL Profiler does not redirect this standalone result path. For a combined capture, TOTAL calls the same Collect action and then copies the completed CET result together with the GRSP and CapFrameX outputs into TOTAL's own result package. Combined-capture behavior belongs to TOTAL; standalone profiler behavior remains unchanged.
 
-ALPHA6B TEST ORDER
-------------------
-A. Known PASS6 install
-   1. Leave the known-good PASS6 0-Engine + Scheduler state installed.
-   2. Confirm `FOUND - UNVERIFIED` + `EXISTING SCHEDULER INTEGRATION`.
-   3. Install, profile, export, collect, restore.
-   4. Confirm init.lua was untouched and Scheduler.lua restored exactly.
+0-ENGINE MODES
+--------------
 
-B. Adaptive custom/unintegrated 0-Engine
-   1. Use a clean/unintegrated 0-Engine copy with a recognizable `return Engine`.
-   2. Confirm `ADAPTIVE BRIDGE AVAILABLE`.
-   3. Install and confirm `modules/CETProfilerScheduler.lua` was added while any
-      existing `modules/Scheduler.lua` was left alone.
-   4. Restore and confirm init.lua and module state are exact originals.
+1. Existing Scheduler-integrated 0-Engine
+   - init.lua stays untouched.
+   - Scheduler.lua is temporarily replaced only when required.
+   - restore puts the exact original back.
 
-C. Core profiler fallback
-   1. Record hashes/fingerprint of the user's 0-Engine folder.
-   2. Check `Core profiler only - leave 0-Engine untouched`.
-   3. Install and confirm the 0-Engine folder remains exactly where it was.
-   4. Run/export profiler data. Scheduler CSVs may be empty unless the existing
-      Scheduler already has profiler attribution support.
-   5. Restore and confirm 0-Engine was never changed at all.
+2. Recognized unintegrated/custom 0-Engine
+   - the exact init.lua is backed up.
+   - a temporary profiler bridge is injected before the final return Engine.
+   - modules\CETProfilerScheduler.lua is added under a profiler-owned name.
+   - restore returns the exact original init.lua/module state.
+
+3. Core profiler only
+   - 0-Engine is left completely untouched.
+   - native CET profiling remains available.
+   - Scheduler attribution is available only if the existing setup already supports it.
+
+SHARED CORE
+-----------
+
+CET_Manager_Core.ps1 is the authoritative lifecycle engine. ProfilerManager.ps1 is only the standalone GUI front-end.
+
+The core supports:
+
+- Status
+- Install
+- Collect
+- ResetLive
+- Restore
+
+TOTAL Profiler calls this exact same core. There is no separate TOTAL-only implementation of CET install, 0-Engine injection, binding management, collection or restore.
+
+RESTORE SAFETY
+--------------
+
+Original files are backed up before replacement and verified. Restore only reverses files managed by the profiler transaction. If live profiler CSVs still exist when Restore is requested, standalone CET archives them into its own RESULTS folder before restoring the game files.
