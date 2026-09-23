@@ -24,34 +24,28 @@ local function isRunning()
   return ok and running == true
 end
 
-local function startFresh()
-  local _, ok = invoke("CETProfilerStart", CETProfilerStart)
-  if ok then say("Fresh capture started.") end
-end
-
-local function stopAndExport()
-  local _, pausedOk = invoke("CETProfilerPause", CETProfilerPause)
-  if not pausedOk then return end
-
-  local _, dumpOk = invoke("CETProfilerDump", CETProfilerDump)
-  if dumpOk then
-    say("Capture stopped and CSV results exported automatically.")
-  end
-end
-
 local function toggleCapture()
   if isRunning() then
-    stopAndExport()
-  else
-    startFresh()
+    local _, pausedOk = invoke("CETProfilerPause", CETProfilerPause)
+    if not pausedOk then return end
+
+    local _, dumpOk = invoke("CETProfilerDump", CETProfilerDump)
+    if dumpOk then
+      say("Capture stopped. CSV results exported automatically.")
+    end
+    return
+  end
+
+  local _, ok = invoke("CETProfilerStart", CETProfilerStart)
+  if ok then
+    say("Fresh capture started.")
   end
 end
 
 registerForEvent("onInit", function()
-  say("TOTAL Profiler control loaded.")
-  say("One shared input: first press STARTS; second press STOPS + EXPORTS CSV automatically.")
+  say("loaded. One capture input: F11 START / F11 STOP + AUTO EXPORT.")
 end)
 
-registerInput("CETProfiler_Toggle", "TOTAL Profiler: START / STOP + EXPORT", function(isKeyDown)
+registerInput("CETProfiler_Toggle", "Profiler: START / STOP + AUTO EXPORT", function(isKeyDown)
   if isKeyDown then toggleCapture() end
 end)
