@@ -789,7 +789,7 @@ function Restore-Profiler($Paths) {
     return $archived
 }
 
-function Get-TotalProfilerStatus($Paths) {
+function Get-ProfilerStatus($Paths) {
     $officialHash = ([string]$Manifest.targetCET.officialSha256).ToLowerInvariant()
     $profilerHash = ([string]$Manifest.targetCET.profilerSha256).ToLowerInvariant()
     $liveHash = Get-Sha256 $Paths.LiveAsi
@@ -840,28 +840,28 @@ try {
 
     switch ($Action) {
         "Status" {
-            Get-TotalProfilerStatus $p | ConvertTo-Json -Depth 12 -Compress
+            Get-ProfilerStatus $p | ConvertTo-Json -Depth 12 -Compress
         }
         "Install" {
             Install-Profiler $p ([bool]$CoreProfilerOnly)
-            Get-TotalProfilerStatus $p | ConvertTo-Json -Depth 12 -Compress
+            Get-ProfilerStatus $p | ConvertTo-Json -Depth 12 -Compress
         }
         "Collect" {
             Assert-GameClosed
             $dest = Collect-ResultsInternal $p $false
-            [ordered]@{ ok=$true; destination=[string]$dest; status=(Get-TotalProfilerStatus $p) } | ConvertTo-Json -Depth 12 -Compress
+            [ordered]@{ ok=$true; destination=[string]$dest; status=(Get-ProfilerStatus $p) } | ConvertTo-Json -Depth 12 -Compress
         }
         "ResetLive" {
             Assert-GameClosed
             $dest = Collect-ResultsInternal $p $true
-            [ordered]@{ ok=$true; archived=$(if ($dest) { [string]$dest } else { "" }); status=(Get-TotalProfilerStatus $p) } | ConvertTo-Json -Depth 12 -Compress
+            [ordered]@{ ok=$true; archived=$(if ($dest) { [string]$dest } else { "" }); status=(Get-ProfilerStatus $p) } | ConvertTo-Json -Depth 12 -Compress
         }
         "Restore" {
             $archived = Restore-Profiler $p
             [ordered]@{
                 ok = $true
                 archived = $(if ($archived) { [string]$archived } else { "" })
-                status = (Get-TotalProfilerStatus $p)
+                status = (Get-ProfilerStatus $p)
             } | ConvertTo-Json -Depth 12 -Compress
         }
     }
