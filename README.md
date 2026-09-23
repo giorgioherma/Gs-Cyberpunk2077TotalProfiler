@@ -3,11 +3,11 @@
 Unified Windows controller for the three-part Cyberpunk 2077 profiling workflow:
 
 - **GRSP 0.5.0** — REDscript profiler
-- **CET Runtime Profiler 3.0.0-alpha6b** — CET/Lua profiler
+- **CET Runtime Profiler 3.0.0-alpha6c** — CET/Lua profiler
 - **CapFrameX** — external frametime capture; linked by the user and not version-locked
 - **Native correlator** — combines GRSP + CET + CapFrameX into synchronized CSV/HTML/JSON/AI-readable output
 
-## v0.2.19 — Measurement / Results workflow
+## v0.2.20 — standalone-profiler dependencies + one-step Results
 
 The TOTAL Profiler controller and correlator are now **C# / .NET 8**. The Windows artifact is published as a normal **self-contained win-x64 folder**.
 
@@ -21,23 +21,30 @@ The app is not a self-extracting executable. The profiler payloads remain visibl
 
 ## Setup
 
-v0.2.19 uses a four-step guided interface:
+v0.2.20 uses a four-step guided interface:
 
 1. **SETUP** — select the Cyberpunk 2077 directory. Bundled CapFrameX and the local Results folder are used automatically unless custom paths are selected.
 2. **INSTALL & VERIFY** — install/verify GRSP, CET, 0-Engine integration and CapFrameX capture configuration. The scenario/capture name is shared with Measurement.
 3. **MEASUREMENT** — run one synchronized F11 measurement. The page keeps the launch/readiness controls and **RESET CAPTURE STATE**, but no result-processing controls.
-4. **RESULTS** — **COLLECT RESULTS**, **COMPARE RESULTS**, **OPEN LAST**, open the current report/folder, return to Measurement, or **RESTORE GAME FILES**.
+4. **RESULTS** — one **COLLECT & COMPARE RESULTS** action builds the TOTAL capture, runs the correlator and creates the final `*_FULL.zip`. Only after that completes does TOTAL open the result directory and HTML overview.
 
 Current capture control:
 
 - **F11 once** — starts GRSP + CET + CapFrameX.
-- **F11 again** — stops all three; CET exports its CSVs automatically.
+- **F11 again** — stops all three; standalone CET automatically exports its CSVs on STOP.
 
-On the first run, make sure CapFrameX's Capture hotkey, the REDscript profiler's current hard-coded key, and CET's profiler binding are all F11. If CapFrameX does not record, make sure `Cyberpunk2077.exe` is the only active capture process.
+CET owns its own F11 binding and persistent install/restore state. TOTAL does not maintain a second CET-specific binding or 0-Engine injection implementation.
 
-**COLLECT RESULTS** creates the canonical capture directory, then opens that directory so the raw files are visible immediately. The capture contains `Raw/`, `Combined/`, `CaptureManifest.json`, and after correlation the final `*_FULL.zip`.
+Profiler outputs stay in their profiler-owned locations:
+- GRSP keeps its capture under `red4ext\plugins\redscript_profiler_alpha\RESULTS\...`;
+- standalone CET collects into its own package-local `RESULTS\...`;
+- CapFrameX keeps its normal capture JSON.
 
-**RESTORE GAME FILES** restores TOTAL Profiler-managed game files/configuration to the pre-profiler state and discards uncollected profiler output. Already-collected TOTAL Profiler Results are preserved.
+TOTAL then copies those completed sources into its own `Results\Capture_...\Raw\` tree and owns only the combined/correlated output.
+
+After a successful **COLLECT & COMPARE RESULTS**, the action is disabled for that measurement. **OPEN RESULT DIRECTORY** and **View full capture overview** remain available, including after restarting the app.
+
+**RESTORE GAME FILES** delegates CET/0-Engine/binding restoration to the standalone CET core and preserves already-built TOTAL Results.
 
 ## Correlator interpretation
 
@@ -212,3 +219,17 @@ No administrator/elevation change and no CapFrameX binary patch is used.
 - CET binding restore now also remembers whether `bindings.json` existed before installation.
 - Restore discards uncollected GRSP/CET/current CapFrameX capture output instead of silently preserving live profiler residue. Already-collected Results remain.
 - GitHub Actions validates both the native C# build and CET manager PowerShell syntax before packaging the Windows artifact.
+
+
+## v0.2.20 standalone-profiler contract
+
+- CET Runtime Profiler is now treated as a standalone dependency rather than a TOTAL-only fork.
+- `components/cet/CET_Manager_Core.ps1` is the authoritative CET lifecycle engine used by both the standalone Manager and TOTAL.
+- Standalone CET alpha6c manages one default F11 binding: first press START; second press STOP + automatic CSV export.
+- CET's persistent transaction remains under `bin\x64\plugins\.cet_runtime_profiler\`, so install/restore survives closing either app.
+- TOTAL no longer rewrites CETProfilerControls or CET bindings separately.
+- TOTAL does not redirect standalone CET collection into a TOTAL staging directory.
+- GRSP and CapFrameX source outputs are copied, not removed, during combined collection.
+- Results is a single resumable **COLLECT & COMPARE RESULTS** workflow. If collection succeeds but comparison fails, the app persists the collected stage and retries comparison without recollecting.
+- The Measurement page explicitly ends with: return to the page and proceed to Results.
+- The public package remains C#/.NET 8, self-contained, multi-file, and GitHub-generated for distribution.
