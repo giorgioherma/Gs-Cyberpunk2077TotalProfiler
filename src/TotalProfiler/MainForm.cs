@@ -784,10 +784,12 @@ internal sealed class MainForm : Form
         installNext.Enabled = !busy && installVerified;
         var collectedRetry = string.Equals(cfg.ResultStage, "collected", StringComparison.OrdinalIgnoreCase) &&
                              !string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture);
-        var complete = HasCompletedResult();
-        collectButton.Enabled = !busy && installVerified && !complete && (measurementReady || collectedRetry);
-        openResultButton.Enabled = !busy && complete;
-        checkResultsLink.Enabled = !busy && complete;
+        var lastComplete = HasCompletedResult();
+        var currentWorkflowComplete = string.Equals(cfg.ResultStage, "complete", StringComparison.OrdinalIgnoreCase) &&
+                                      lastComplete && !measurementReady;
+        collectButton.Enabled = !busy && installVerified && !currentWorkflowComplete && (measurementReady || collectedRetry);
+        openResultButton.Enabled = !busy && lastComplete;
+        checkResultsLink.Enabled = !busy && lastComplete;
         restoreButton.Enabled = !busy && gameValid;
     }
 
@@ -924,13 +926,13 @@ internal sealed class MainForm : Form
             {
                 lastCaptureStatus.Text = $"Collected ✓ · comparison/packaging pending\r\n{Path.GetFileName(cfg.LastCapture)}";
             }
-            else if (HasCompletedResult())
-            {
-                lastCaptureStatus.Text = $"Complete ✓ · {Path.GetFileName(cfg.LastCapture)}\r\n{cfg.LastCapture}";
-            }
             else if (measurementReady)
             {
                 lastCaptureStatus.Text = "Measurement detected ✓ · ready to COLLECT & COMPARE RESULTS.";
+            }
+            else if (HasCompletedResult())
+            {
+                lastCaptureStatus.Text = $"Complete ✓ · {Path.GetFileName(cfg.LastCapture)}\r\n{cfg.LastCapture}";
             }
             else if (!string.IsNullOrWhiteSpace(cfg.LastCapture) && Directory.Exists(cfg.LastCapture))
             {
@@ -1194,7 +1196,7 @@ internal sealed class MainForm : Form
         if (MessageBox.Show(this,
             "Restore every TOTAL Profiler change in the Cyberpunk 2077 game folder?\r\n\r\n" +
             "All TOTAL Profiler-managed game files and configuration will be returned to their original state. CapFrameX settings changed by TOTAL Profiler will also be restored.\r\n\r\n" +
-            "Any uncollected GRSP, CET, or current CapFrameX capture data will be discarded. Already-collected Results stay.\r\n\r\n" +
+            "Standalone CET archives any live CSVs through its own restore path. GRSP/CapFrameX managed state is restored by TOTAL. Already-built TOTAL Results stay.\r\n\r\n" +
             "Cyberpunk 2077 must be closed.",
             ProfilerServices.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
@@ -1295,8 +1297,7 @@ internal sealed class MainForm : Form
 
     private bool HasCompletedResult()
     {
-        return string.Equals(cfg.ResultStage, "complete", StringComparison.OrdinalIgnoreCase) &&
-               CaptureIsComplete(cfg.LastCapture);
+        return CaptureIsComplete(cfg.LastCapture);
     }
 
     private static bool CaptureIsComplete(string? capture)
